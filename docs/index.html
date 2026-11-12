@@ -4,37 +4,79 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Поток — совместные закупки у фермеров</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --green: #1f7a3a;
-    --green-d: #145c2b;
-    --leaf: #e7f6ea;
-    --ink: #1c241c;
-    --muted: #5c6b5e;
-    --cream: #f6f3eb;
-    --card: #fff;
-    --line: #e4e0d4;
+    --green: #2dbe64;
+    --green-d: #128a45;
+    --berry: #d7144b;
+    --leaf: #e9f8ee;
+    --ink: #333333;
+    --muted: #5e675f;
+    --cream: #f6f4ef;
+    --card: #fffcf7;
+    --line: #e6e1d6;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
-    font-family: "Segoe UI", system-ui, sans-serif;
-    background: #0e1a12;
+    font-family: Onest, "Segoe UI", sans-serif;
+    background: #102216;
     color: var(--ink);
     overflow: hidden;
   }
   .deck { height: 100%; position: relative; }
   .slide {
-    display: none;
-    height: 100%;
-    padding: 48px 64px 72px;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 52px 68px 88px;
     background:
-      radial-gradient(900px 420px at 100% -10%, #d7f0dc 0%, transparent 60%),
+      radial-gradient(880px 380px at 100% -8%, #d9f6e2 0%, transparent 58%),
       var(--cream);
+    opacity: 0;
+    visibility: hidden;
+    transform: translate3d(0, 28px, 0) scale(0.985);
+    filter: blur(10px);
+    transition: opacity .7s cubic-bezier(.22,1,.36,1), transform .85s cubic-bezier(.22,1,.36,1), filter .7s ease, visibility .7s;
+    overflow: auto;
+    z-index: 1;
   }
-  .slide.active { display: flex; flex-direction: column; }
-  h1 { font-size: 56px; line-height: 1.05; margin: 0 0 12px; letter-spacing: -1px; }
-  h2 { font-size: 36px; margin: 0 0 18px; letter-spacing: -0.5px; }
+  .slide.active {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    filter: none;
+    z-index: 2;
+  }
+  .slide.leave {
+    opacity: 0;
+    visibility: visible;
+    transform: translate3d(0, -36px, 0) scale(1.02);
+    filter: blur(8px);
+    z-index: 3;
+  }
+  .veil {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    background: #2dbe64;
+    clip-path: inset(100% 0 0 0);
+  }
+  body.turning .veil { animation: curtain .92s cubic-bezier(.77,0,.18,1); }
+  @keyframes curtain {
+    0% { clip-path: inset(100% 0 0 0); }
+    42% { clip-path: inset(0 0 0 0); }
+    58% { clip-path: inset(0 0 0 0); }
+    100% { clip-path: inset(0 0 100% 0); }
+  }
+  h1, h2, h3, .logo { font-family: Nunito, Onest, sans-serif; }
+  h1 { font-size: clamp(40px, 5vw, 64px); line-height: 1.02; margin: 0 0 14px; letter-spacing: -0.03em; font-weight: 800; }
+  h2 { font-size: clamp(28px, 3.2vw, 40px); margin: 0 0 18px; letter-spacing: -0.03em; font-weight: 800; line-height: 1.1; }
   p { margin: 0 0 12px; font-size: 18px; line-height: 1.45; color: var(--ink); }
   .kicker {
     color: var(--green);
@@ -115,19 +157,32 @@
     background: transparent; color: #e7f6ea; border: 1px solid #3d5a45;
     border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 14px;
   }
-  .logo { font-weight: 800; font-size: 22px; color: var(--green-d); }
-  .hero-title { font-size: 72px; }
-  .tag { display: inline-block; background: var(--leaf); color: var(--green-d); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 700; margin-right: 6px; }
+  .logo { font-weight: 800; font-size: 22px; color: var(--green-d); letter-spacing: -0.03em; }
+  .hero-title { font-size: clamp(42px, 6vw, 76px); }
+  .tag { display: inline-block; background: var(--leaf); color: var(--green-d); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 700; margin: 0 8px 8px 0; }
+  .bar {
+    height: 64px;
+    padding: 0 28px calc(8px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(16px);
+  }
   @media (max-width: 900px) {
-    .slide { padding: 24px 18px 72px; overflow: auto; }
+    .slide { padding: 22px 16px calc(96px + env(safe-area-inset-bottom)); }
     .row, .cards { flex-direction: column; display: flex; }
-    h1, .hero-title { font-size: 36px; }
+    .cards { display: flex; }
     h2 { font-size: 26px; }
-    .phone { max-height: 360px; }
+    p, td, th, ol.flow li { font-size: 15px; }
+    .phone { max-height: 46vh; width: auto; max-width: 100%; }
+    .wide { max-height: none; width: 100%; }
+    .card { padding: 14px; }
+    table { display: block; overflow-x: auto; }
+    .bar { height: auto; min-height: 64px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
+    .navbtn { min-width: 48px; min-height: 44px; font-size: 18px; }
+    .dots button { width: 12px; height: 12px; }
   }
 </style>
 </head>
 <body>
+<div class="veil" aria-hidden="true"></div>
 <div class="deck" id="deck">
 
 <section class="slide active">
@@ -275,25 +330,53 @@
   const slides = [...document.querySelectorAll(".slide")];
   const dots = document.getElementById("dots");
   let i = 0;
+  let lock = false;
   slides.forEach((_, n) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.addEventListener("click", () => show(n));
+    b.setAttribute("aria-label", "Слайд " + (n + 1));
+    b.addEventListener("click", () => go(n));
     dots.appendChild(b);
   });
-  function show(n) {
-    i = (n + slides.length) % slides.length;
+  function paint() {
     slides.forEach((s, k) => s.classList.toggle("active", k === i));
     [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
     document.getElementById("label").textContent = (i + 1) + " / " + slides.length;
+    slides[i].scrollTop = 0;
   }
-  document.getElementById("prev").onclick = () => show(i - 1);
-  document.getElementById("next").onclick = () => show(i + 1);
+  function go(n) {
+    n = (n + slides.length) % slides.length;
+    if (n === i || lock) return;
+    lock = true;
+    const prev = slides[i];
+    prev.classList.add("leave");
+    prev.classList.remove("active");
+    document.body.classList.add("turning");
+    window.setTimeout(() => {
+      i = n;
+      paint();
+      prev.classList.remove("leave");
+    }, 380);
+    window.setTimeout(() => {
+      document.body.classList.remove("turning");
+      lock = false;
+    }, 920);
+  }
+  paint();
+  document.getElementById("prev").onclick = () => go(i - 1);
+  document.getElementById("next").onclick = () => go(i + 1);
   document.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); show(i + 1); }
-    if (e.key === "ArrowLeft") show(i - 1);
+    if (e.key === "ArrowRight" || e.key === " ") { e.preventDefault(); go(i + 1); }
+    if (e.key === "ArrowLeft") go(i - 1);
   });
-  show(0);
+  let x0 = null;
+  document.addEventListener("touchstart", (e) => { x0 = e.changedTouches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (x0 == null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    if (Math.abs(dx) > 48) go(dx < 0 ? i + 1 : i - 1);
+    x0 = null;
+  }, { passive: true });
 </script>
 </body>
 </html>
