@@ -1,86 +1,61 @@
-# Запуск
+# Запуск фронтенда
 
+Клиент — сайт в браузере: `web/`, Vite, React, TypeScript. Страница открывается и на телефоне, и на компьютере. Команды ниже выполняются в Ubuntu внутри WSL, не в PowerShell: в PowerShell нет `npm`, а `npm install` на диске `C:` (`/mnt/c/...`) ломает esbuild.
 
+Публичный хост: `https://programism.ru/`. Локально страница — `http://127.0.0.1:5173/`, API — `http://127.0.0.1:8000`.
 
-Локально API и Postgres работают в WSL2 (Ubuntu). Docker не используется. Код и команды ниже выполняются в терминале Ubuntu, не в PowerShell. Python 3.15, PostgreSQL 18.7 или новее, пакеты из `backend/requirements.txt` (Django 6.1.3+, Django Ninja 1.8).
+## Где лежит код
 
-## WSL
+Рабочая копия — `~/POTOK`, не папка на `C:`. Если её ещё нет:
 
-Дистрибутив уже установлен и используется другим проектом. Его не переустанавливают и не сбрасывают. Команды `wsl --install`, `wsl --unregister` и `wsl --set-default` не запускать: первая как раз и дала `ERROR_ALREADY_EXISTS`.
+```bash
+mkdir -p ~/POTOK
+cp -a /mnt/c/W27/POTOK/. ~/POTOK/
+```
 
-Войти в уже существующий Linux:
+Дальше править и запускать из `~/POTOK/web`. Если файл изменён в `c:\W27\POTOK`, его нужно снова скопировать в `~/POTOK`, иначе Vite его не увидит:
+
+```bash
+cp -a /mnt/c/W27/POTOK/web/. ~/POTOK/web/
+```
+
+Чужой WSL и чужие проекты не трогать. `wsl --install`, `wsl --unregister` и `wsl --set-default` не запускать.
+
+Войти в Linux из PowerShell:
 
 ```powershell
 wsl
 ```
 
-Проверка: `uname -a` показывает Linux, `ls ~` показывает домашние каталоги других проектов. Их не удалять и не переносить.
+## Один раз
 
-Репозиторий «Потока» — отдельная папка, например `~/POTOK`. Каталог на диске `C:` виден как `/mnt/c/W27/POTOK`. Если копируете его в Linux, только в новый каталог:
-
-```bash
-mkdir -p ~/POTOK
-cp -a /mnt/c/W27/POTOK/. ~/POTOK/
-cd ~/POTOK
-```
-
-`mkdir` не затирает чужие папки. Если `~/POTOK` уже есть и это не этот проект, возьмите другое имя.
-
-Cursor для этого репозитория открывайте как `\\wsl$\Ubuntu\home\<имя>\POTOK`. Окно другого проекта не закрывать и его каталог не выбирать заново.
-
-Python 3.15 и Postgres 18 ставятся рядом с тем, что уже есть, через deadsnakes и PGDG. Кластер Postgres другого проекта не пересоздают, `pg_dropcluster` и `apt remove postgresql` не вызывают.
-
-Пароль `sudo` — пароль пользователя Linux, заданный при первой настройке этого Ubuntu для другого проекта. Пароль Windows и пароль базы `potok` сюда не подходят. Дистрибутив из-за забытого пароля не переустанавливают. Новый пароль этому пользователю задают из PowerShell, не стирая WSL:
-
-```powershell
-wsl -u root
-passwd user
-```
-
-`passwd` спросит новый пароль дважды. После `exit` команда `sudo` в Ubuntu снова работает. Файлы и базы другого проекта при этом остаются.
-
-Сначала проверить, слушает ли база уже:
+В Ubuntu уже стоит Node.js 18 из apt. Этого хватает: React Router зафиксирован на 6.30, седьмая версия просит Node 20.
 
 ```bash
-pg_isready
+cd ~/POTOK/web
+npm install
 ```
 
-Если ответ `accepting connections`, команду `sudo service postgresql start` не выполняют. Она нужна только когда `pg_isready` пишет, что соединений нет, и только после перезагрузки Windows. Сейчас на этой машине уже отвечает PostgreSQL 16 на `127.0.0.1:5432`. Для «Потока» его не останавливают. Отдельная версия 18.7, когда появится, должна слушать другой порт, а не подменять этот кластер.
+Повторно `npm install` нужен только после изменения `package.json`.
 
-## База
+## Каждый запуск
 
-Создаётся только база `potok`. Чужие базы и роли не удаляют и не меняют.
-
-Один раз:
+Сначала должен работать API из `deploy.md` (`runserver` на порту 8000). Затем в отдельном окне Ubuntu:
 
 ```bash
-sudo -u postgres psql -c "CREATE USER potok WITH PASSWORD 'potok';"
-sudo -u postgres psql -c "CREATE DATABASE potok OWNER potok;"
+cd ~/POTOK/web
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Повторный запуск этих команд выдаст ошибку «уже существует» — это нормально. `dropdb`, `DROP DATABASE` и `DROP USER` для других имён не выполнять.
+Окно не закрывать. В браузере Windows открыть `http://127.0.0.1:5173/`.
 
-## API
-
-Каждый рабочий сеанс:
+Адрес API по умолчанию — `http://127.0.0.1:8000`. Другой порт задают перед запуском:
 
 ```bash
-cd ~/POTOK/backend
-python3.15 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-set -a && . ./.env && set +a
-python3 manage.py migrate
-python3 manage.py runserver 0.0.0.0:8000
+export VITE_API_URL=http://127.0.0.1:8001
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Виртуальное окружение и `pip install` повторять не нужно, если `.venv` уже есть. Достаточно `. .venv/bin/activate`, подключить `.env` и запустить `runserver`. Окно не закрывать: пока оно открыто, API слушает порт 8000. Если этот порт уже занят другим проектом, останавливать его не нужно: запустите `runserver 0.0.0.0:8001` и откройте документацию на порту 8001.
+Остановить страницу: Ctrl+C в том же окне. Процесс другого проекта на 5173 не убивать: возьмите свободный порт, например 5174, и откройте его в браузере.
 
-Схема: `http://127.0.0.1:8000/api/docs` — открывается и из браузера Windows.
-
-Телефон в той же сети ходит на `http://<IP компьютера>:8000`. IP смотрят в PowerShell командой `ipconfig`, это адрес адаптера Wi-Fi, не адрес `eth0` внутри WSL. Фото Django отдаёт из `backend/media`.
-
-Остановить сервер: Ctrl+C в том же окне Ubuntu.
-
-На сервере тот же каталог, переменные `DATABASE_URL`, `DJANGO_SECRET_KEY`, `JWT_SECRET`, `MEDIA_ROOT`. Процесс: `gunicorn config.wsgi:application -w 1 --max-requests 400 --max-requests-jitter 40 -b 127.0.0.1:8011`. Один воркер, чтобы не занимать лишнюю память на общем VPS. Снаружи nginx на `potok.h1n.ru`: API проксируется на gunicorn, `/media/` читается с диска.
+Телефон в той же сети открывает `http://<IP компьютера>:5173`. IP смотрят в PowerShell командой `ipconfig` (адрес Wi-Fi), не адрес `eth0` внутри WSL. Для этого Vite запускают с `--host 0.0.0.0`, а в API должен быть разрешён этот origin.

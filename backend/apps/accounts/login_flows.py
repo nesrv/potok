@@ -77,7 +77,7 @@ def vk_start() -> dict:
         }
     )
     return {
-        "url": f"https://id.vk.com/authorize?{query}",
+        "url": f"https://id.vk.ru/authorize?{query}",
         "state": state,
         "verifier": verifier,
     }
@@ -98,7 +98,7 @@ def vk_finish(code: str, device_id: str, verifier: str, state: str) -> User:
     if settings.VK_CLIENT_SECRET:
         data["client_secret"] = settings.VK_CLIENT_SECRET
     try:
-        payload = _post_form("https://id.vk.com/oauth2/auth", data)
+        payload = _post_form("https://id.vk.ru/oauth2/auth", data)
     except Exception as exc:
         raise OrderError(502, "VK не ответил") from exc
     token = payload.get("access_token")
@@ -108,7 +108,7 @@ def vk_finish(code: str, device_id: str, verifier: str, state: str) -> User:
     email = (payload.get("email") or "").strip().lower()
     if not email:
         info = _post_form(
-            "https://id.vk.com/oauth2/user_info",
+            "https://id.vk.ru/oauth2/user_info",
             {"access_token": token, "client_id": settings.VK_CLIENT_ID},
         )
         email = ((info.get("user") or {}).get("email") or "").strip().lower()
