@@ -6,7 +6,8 @@
 
 | Часть | Технология | Роль |
 | --- | --- | --- |
-| Мобильный клиент | Expo (React Native), TypeScript, Expo Router | Экраны витрины, товара, заявки и кабинета продавца |
+| Веб-клиент | Vite, React, TypeScript | Экраны витрины, товара, заявки и кабинета в браузере |
+| Мобильный клиент | Expo, позже | Те же сценарии после проверки в браузере |
 | API | Django 6.1.3+, Django Ninja 1.8, Python 3.15 | Правила заказа, доступ, OpenAPI |
 | База | PostgreSQL 18.7+ | Витрины, товары, районы, заказы, заявки |
 | Файлы | Каталог `MEDIA_ROOT`, стандартное хранилище Django | Фото товаров |
@@ -37,7 +38,7 @@ flowchart LR
 
 ```text
 backend/          Django-проект
-mobile/           Expo-приложение
+web/              браузерный клиент
 spec.md
 structure.md
 agents.md
@@ -161,15 +162,18 @@ S3 и пакет `django-storages` не используются. В ответ�
 
 ## 9. Клиент
 
-Expo Router, TypeScript, стили через `StyleSheet`. Состояние экранов локальное. Общего стора нет.
+Сначала браузер. Vite, React, TypeScript, React Router, обычный CSS. Состояние экранов локальное. Общего стора нет. JWT хранится в `localStorage`. Запросы идут в `/api/` через `fetch` с заголовком `Authorization: Bearer`. Базовый адрес API задаёт `VITE_API_URL`.
+
+Django разрешает origin веб-клиента через CORS, включая заголовок `Authorization`.
 
 ```text
-mobile/
-  app/                экраны Expo Router
-  src/api/            функции по ручкам OpenAPI
-  src/auth/           хранение JWT
-  src/components/     кнопки, карточки, формы
+web/
+  src/api.ts          функции по ручкам
+  src/pages/          экраны
+  src/styles.css
 ```
+
+Expo на React Native делается следующим этапом, когда сценарии пройдены в браузере. Каталога `mobile/` пока нет.
 
 Экраны:
 
@@ -189,7 +193,7 @@ mobile/
 Локально на Windows репозиторий лежит в файловой системе WSL2, не на диске `C:`.
 
 - В WSL2: Postgres, установленный в сам дистрибутив, и Django (`runserver`). Django ходит в базу по `localhost`. Так же устроен сервер: Linux, Postgres, процесс Django.
-- В Windows: Metro и Expo. Телефон с Expo Go в одной сети с компьютером открывает API по IP этой машины и порту Django из WSL.
+- В Windows или в том же WSL: Vite (`web/`). Браузер открывает клиент, API — на порту Django. Телефон в одной сети ходит на IP компьютера.
 
 Docker не используется. Отдельный Postgres в Windows не используется.
 

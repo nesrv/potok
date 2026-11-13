@@ -174,3 +174,54 @@ class OrderRulesTests(TestCase):
         )
         self.assertEqual(created.status_code, 400)
         self.assertFalse(GroupOrder.objects.filter(product_id=product_id).exists())
+
+    def login(self, email):
+        response = self.post("/api/auth/token", {"login": email, "password": "password1"})
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()["token"]
+
+    def test_two_farmers_from_register_until_batch_closes(self):
+        first = self.auth("farmer-one@example.com")
+        first = self.login("farmer-one@example.com")
+        second = self.auth("farmer-two@example.com")
+        second = self.login("farmer-two@example.com")
+
+        milk_id, milk_district = self.setup_product(first, "4")
+        eggs_id, eggs_district = self.setup_product(second, "6")
+        self.assertNotEqual(milk_id, eggs_id)
+        self.assertNotEqual(milk_district, eggs_district)
+
+        own = self.post(
+            f"/api/products/{eggs_id}/lines",
+            {"quantity": "2", "district_id": eggs_district, "address": "ул. Садовая, 2"},
+            second,
+        )
+        self.assertEqual(own.status_code, 200, own.content)
+        self.assertEqual(own.json()["status"], "collecting")
+
+        joined = self.post(
+            f"/api/products/{milk_id}/lines",
+            {"quantity": "4", "district_id": milk_district, "address": "ул. Лесная, 8"},
+            second,
+        )
+        self.assertEqual(joined.status_code, 200, joined.content)
+        self.assertEqual(joined.json()["status"], "topup")
+        self.assertTrue(joined.json()["cancel_blocked"])
+        order_id = joined.json()["order_id"]
+
+        order = GroupOrder.objects.get(pk=order_id)
+        order.topup_ends_at = timezone.now() - timedelta(minutes=1)
+        order.save(update_fields=["topup_ends_at"])
+
+        card = self.client.get(f"/api/products/{milk_id}")
+        self.assertIsNone(card.json()["progress"]["status"])
+        detail = self.client.get(
+            f"/api/orders/{order_id}",
+            HTTP_AUTHORIZATION=f"Bearer {second}",
+        )
+        self.assertEqual(detail.status_code, 200, detail.content)
+        body = detail.json()
+        self.assertEqual(body["status"], "closed")
+        self.assertEqual(body["lines"][0]["address"], "ул. Лесная, 8")
+        self.assertEqual(Decimal(body["quantity"]), Decimal("4"))
+        self.assertEqual(DistrictNotice.objects.filter(order_id=order_id).count(), 1)

@@ -21,6 +21,7 @@ from apps.orders.services import (
     progress,
 )
 from apps.storefronts.models import Product, Storefront
+from apps.accounts.login_flows import send_email_code, verify_email_code, vk_finish, vk_start
 from config.jwt_auth import JWTAuth, issue_token
 from media_storage import save_product_photo
 
@@ -116,6 +117,44 @@ def register(request, payload: RegisterIn):
     return {"token": issue_token(user)}
 
 
+class EmailIn(Schema):
+    email: str
+
+
+class EmailCodeIn(Schema):
+    email: str
+    code: str
+
+
+class VkFinishIn(Schema):
+    code: str
+    device_id: str = ""
+    verifier: str
+    state: str
+
+
+@router.post("/auth/email/send", auth=None)
+def email_send(request, payload: EmailIn):
+    send_email_code(payload.email)
+    return {"ok": True}
+
+
+@router.post("/auth/email/verify", auth=None, response=TokenOut)
+def email_verify(request, payload: EmailCodeIn):
+    return {"token": issue_token(verify_email_code(payload.email, payload.code))}
+
+
+@router.get("/auth/vk/start", auth=None)
+def vk_begin(request):
+    return vk_start()
+
+
+@router.post("/auth/vk/finish", auth=None, response=TokenOut)
+def vk_complete(request, payload: VkFinishIn):
+    user = vk_finish(payload.code, payload.device_id, payload.verifier, payload.state)
+    return {"token": issue_token(user)}
+
+
 @router.post("/auth/token", auth=None, response=TokenOut)
 def token(request, payload: TokenIn):
     user = User.objects.filter(login=payload.login.strip().lower()).first()
@@ -124,7 +163,7 @@ def token(request, payload: TokenIn):
     return {"token": issue_token(user)}
 
 
-@router.get("/storefronts", auth=auth)
+@router.get("/storefronts", auth=None)
 def list_storefronts(request):
     rows = Storefront.objects.all().order_by("id")
     return [{"id": row.pk, "name": row.name, "owner_id": row.owner_id} for row in rows]
@@ -140,7 +179,7 @@ def create_storefront(request, payload: StorefrontIn):
     return {"id": row.pk, "name": row.name}
 
 
-@router.get("/storefronts/{storefront_id}", auth=auth)
+@router.get("/storefronts/{storefront_id}", auth=None)
 def storefront_detail(request, storefront_id: int):
     row = get_object_or_404(Storefront, pk=storefront_id)
     products = [
@@ -235,7 +274,7 @@ def put_districts(request, product_id: int, payload: DistrictsIn):
     return [{"id": district.pk, "name": district.name} for district in districts]
 
 
-@router.get("/products/{product_id}", auth=auth)
+@router.get("/products/{product_id}", auth=None)
 def product_detail(request, product_id: int):
     product = get_object_or_404(Product.objects.select_related("storefront"), pk=product_id)
     close_expired(product)
@@ -302,7 +341,7 @@ def order_detail(request, order_id: int):
     }
 
 
-@router.get("/districts/{district_id}/notices", auth=auth)
+@router.get("/districts/{district_id}/notices", auth=None)
 def notices(request, district_id: int):
     get_object_or_404(District, pk=district_id)
     rows = DistrictNotice.objects.filter(district_id=district_id).order_by("-created_at")
