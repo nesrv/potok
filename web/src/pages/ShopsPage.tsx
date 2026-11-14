@@ -97,26 +97,31 @@ export function ShopsPage() {
   const [mapOpen, setMapOpen] = useState(false);
 
   useEffect(() => {
-    function load(lat?: number, lon?: number) {
+    function load(lat?: number, lon?: number, label?: string) {
       const query = lat != null && lon != null ? `?lat=${lat}&lon=${lon}&all=1` : "?all=1";
       api<Shop[]>(`/api/storefronts/nearby${query}`)
         .then((rows) => {
           setShops(rows);
-          setNote(lat == null ? "Без геолокации порядок общий" : "Ближние сверху");
+          setNote(label ? `Ближние к ${label} сверху` : "Сначала укажите населённый пункт на главной");
         })
         .catch((err: Error) => setError(err.message));
     }
-    if (!navigator.geolocation) {
+    const saved = localStorage.getItem("potok_place");
+    if (!saved) {
       load();
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setHere([position.coords.latitude, position.coords.longitude]);
-        load(position.coords.latitude, position.coords.longitude);
-      },
-      () => load(),
-    );
+    try {
+      const row = JSON.parse(saved) as { label?: string; lat: number; lon: number };
+      if (row.lat == null || row.lon == null) {
+        load();
+        return;
+      }
+      setHere([row.lat, row.lon]);
+      load(row.lat, row.lon, row.label);
+    } catch {
+      load();
+    }
   }, []);
 
   if (error) return <p className="error">{error}</p>;
