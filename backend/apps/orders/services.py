@@ -31,6 +31,7 @@ def progress(order: GroupOrder | None, product: Product) -> dict:
             "buyers": None,
             "quantity": None,
             "minimum": None,
+            "maximum": dec(product.maximum),
             "remaining": None,
             "cancel_blocked": None,
             "topup_ends_at": None,
@@ -46,6 +47,7 @@ def progress(order: GroupOrder | None, product: Product) -> dict:
         "buyers": buyer_count(order),
         "quantity": dec(order.quantity),
         "minimum": dec(minimum),
+        "maximum": dec(product.maximum),
         "remaining": dec(remaining),
         "cancel_blocked": order.status != GroupOrder.COLLECTING,
         "topup_ends_at": order.topup_ends_at,
@@ -119,6 +121,11 @@ def add_line(product: Product, buyer, quantity: Decimal, district_id: int, addre
     order = _lock_open(product, now)
     if order.status == GroupOrder.TOPUP and order.topup_ends_at and order.topup_ends_at <= now:
         raise OrderError(409, "окно дозаказа закрыто")
+    if product.maximum is not None and order.quantity + quantity > product.maximum:
+        left = product.maximum - order.quantity
+        if left <= 0:
+            raise OrderError(400, "максимум уже набран, больше добавить нельзя")
+        raise OrderError(400, f"больше максимума, можно ещё {left} {product.unit}")
     OrderLine.objects.create(
         order=order,
         buyer=buyer,

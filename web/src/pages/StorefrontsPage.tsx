@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { api, ProductCard } from "../api";
+import { Link, useNavigate } from "react-router-dom";
+import { api, getToken, ProductCard, setToken, userId } from "../api";
 
 type Storefront = { id: number; name: string };
 type Offer = {
@@ -128,12 +128,24 @@ function loadYandex(key: string) {
   });
 }
 
+function cityOnly(label: string) {
+  const skip = ["край", "область", "республика", "округ", "район", "россия"];
+  const part = label
+    .split(",")
+    .map((item) => item.trim())
+    .find((item) => item && !skip.some((word) => item.toLowerCase().includes(word)));
+  return (part || label).replace(/^г\.\s*/i, "").replace(/^город\s+/i, "");
+}
+
 function matches(text: string, words: string[]) {
   const value = text.toLowerCase();
   return words.some((word) => value.includes(word));
 }
 
 export function StorefrontsPage() {
+  const navigate = useNavigate();
+  const signedIn = Boolean(getToken());
+  const [shop, setShop] = useState("");
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [farms, setFarms] = useState<Storefront[]>([]);
   const [error, setError] = useState("");
@@ -147,20 +159,28 @@ export function StorefrontsPage() {
   const [category, setCategory] = useState("");
 
   function remember(label: string, point: [number, number]) {
-    setPlace(label);
-    setDraft(label);
+    const city = cityOnly(label);
+    setPlace(city);
+    setDraft(city);
     setHere(point);
     setHints([]);
-    localStorage.setItem("potok_place", JSON.stringify({ label, lat: point[0], lon: point[1] }));
+    localStorage.setItem("potok_place", JSON.stringify({ label: city, lat: point[0], lon: point[1] }));
   }
+
+  useEffect(() => {
+    if (!signedIn) return;
+    api<{ name: string; owner_id: number }[]>("/api/storefronts")
+      .then((rows) => setShop(rows.find((row) => row.owner_id === userId())?.name || ""))
+      .catch(() => setShop(""));
+  }, [signedIn]);
 
   useEffect(() => {
     const saved = localStorage.getItem("potok_place");
     if (saved) {
       try {
         const row = JSON.parse(saved) as { label: string; lat: number; lon: number };
-        setPlace(row.label);
-        setDraft(row.label);
+        setPlace(cityOnly(row.label));
+        setDraft(cityOnly(row.label));
         setHere([row.lat, row.lon]);
         return;
       } catch {
@@ -236,6 +256,8 @@ export function StorefrontsPage() {
   return (
     <div className="home">
       <header className="hero">
+        <div className="home-bar">
+          {shop && <span className="who">{shop}</span>}
         <form
           className="place-line"
           onSubmit={(event) => {
@@ -288,9 +310,24 @@ export function StorefrontsPage() {
               ))}
             </div>
           )}
-          <button type="submit">Это мой город</button>
+          <button type="submit" className="place-ok" aria-label="Это мой город">Ок</button>
         </form>
-        <img className="header-art" src="/potok-header.png?v=1" alt="Поток. Совместные закупки у фермеров" />
+          {signedIn ? (
+            <button
+              type="button"
+              className="leave"
+              onClick={() => {
+                setToken(null);
+                navigate("/");
+              }}
+            >
+              Выйти
+            </button>
+          ) : (
+            <Link className="leave" to="/login">Войти</Link>
+          )}
+        </div>
+        <img className="header-art" src="/potok-header.png?v=2" alt="Поток. Совместные закупки у фермеров" />
       </header>
       {mapOpen && (
         <NearbyMap

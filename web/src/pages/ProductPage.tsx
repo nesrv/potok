@@ -107,7 +107,11 @@ export function ProductPage() {
             <h2>{card.description}</h2>
             <b>{card.unit}</b>
           </div>
-          <p className="muted">Минимум {Number(card.minimum)} {card.unit}. После минимума дозаказ ещё {card.topup_hours} ч.</p>
+          <Link className="shop-link" to={`/storefronts/${card.storefront_id}`}>В лавку</Link>
+          <p className="muted">
+            Доставка от {Number(card.minimum)}
+            {card.maximum ? ` до ${Number(card.maximum)}` : ""} {card.unit}. После минимума дозаказ ещё {card.topup_hours} ч.
+          </p>
           {progress.status ? (
             <>
               <p className="qty">
@@ -143,7 +147,14 @@ export function ProductPage() {
         <p className="muted">Укажите количество, район и точку. Оплата на этой странице не нужна.</p>
         <label className="field">
           <span>Количество, {card.unit}</span>
-          <input inputMode="decimal" placeholder="Например, 2" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+          <input
+            inputMode="decimal"
+            placeholder="Например, 2"
+            value={quantity}
+            max={card.maximum && progress.quantity != null ? Math.max(0, Number(card.maximum) - Number(progress.quantity)) : card.maximum ? Number(card.maximum) : undefined}
+            onChange={(event) => setQuantity(event.target.value)}
+            required
+          />
         </label>
         <label className="field">
           <span>Район доставки</span>

@@ -49,6 +49,7 @@ export function StorefrontPage() {
   const { id } = useParams();
   const [row, setRow] = useState<Detail | null>(null);
   const [error, setError] = useState("");
+  const [story, setStory] = useState(false);
 
   useEffect(() => {
     api<Detail>(`/api/storefronts/${id}`)
@@ -64,20 +65,57 @@ export function StorefrontPage() {
     ...(row.services || []),
   ];
 
+  const cover = row.gallery?.[0]?.photo || row.products.find((product) => product.photo)?.photo;
+  const hasStory = Boolean(row.gallery?.length || row.offers?.length || row.address || tags.length);
+
   return (
     <article className="stall">
       <header className="stall-head">
+        {cover ? <img className="stall-cover" src={cover} alt="" /> : null}
         <p className="stall-kind">{kind(row.title)}</p>
         <h1>{row.name}</h1>
-        {row.address ? <p className="stall-address">{row.address}</p> : null}
-        {tags.length > 0 && (
-          <ul className="stall-tags">
-            {tags.map((tag) => (
-              <li key={tag}>{tag}</li>
-            ))}
-          </ul>
+        {hasStory && (
+          <button type="button" className="story-link" onClick={() => setStory((open) => !open)}>
+            {story ? "Скрыть экскурсию" : "Фотоэкскурсия"}
+          </button>
         )}
       </header>
+
+      {story && (
+        <section className="stall-story">
+          {row.address ? <p className="stall-address">{row.address}</p> : null}
+          {tags.length > 0 && (
+            <ul className="stall-tags">
+              {tags.map((tag) => (
+                <li key={tag}>{tag}</li>
+              ))}
+            </ul>
+          )}
+          {!!row.offers?.length && (
+            <div className="offer-services">
+              {row.offers.map((offer) => (
+                <article key={offer.name} className="card service-card">
+                  {offer.photo ? <img src={offer.photo} alt="" /> : null}
+                  <div>
+                    <h3>{offer.name}</h3>
+                    <p>{offer.text}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+          {!!row.gallery?.length && (
+            <div className="gallery">
+              {row.gallery.map((shot) => (
+                <figure key={shot.photo}>
+                  <img src={shot.photo} alt={shot.caption || row.name} />
+                  {shot.caption ? <figcaption>{shot.caption}</figcaption> : null}
+                </figure>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="stall-block">
         <h2>В продаже</h2>
@@ -107,33 +145,6 @@ export function StorefrontPage() {
         </div>
       </section>
 
-      {!!row.gallery?.length && (
-        <div className="gallery">
-          {row.gallery.map((shot) => (
-            <figure key={shot.photo}>
-              <img src={shot.photo} alt={shot.caption || row.name} />
-              {shot.caption ? <figcaption>{shot.caption}</figcaption> : null}
-            </figure>
-          ))}
-        </div>
-      )}
-
-      {!!row.offers?.length && (
-        <section className="stall-block">
-          <h2>На хозяйстве</h2>
-          <div className="offer-services">
-            {row.offers.map((offer) => (
-              <article key={offer.name} className="card service-card">
-                {offer.photo ? <img src={offer.photo} alt="" /> : null}
-                <div>
-                  <h3>{offer.name}</h3>
-                  <p>{offer.text}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
     </article>
   );
 }

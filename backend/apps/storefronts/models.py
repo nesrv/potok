@@ -25,6 +25,7 @@ class Product(models.Model):
     description = models.TextField(blank=True)
     unit = models.CharField(max_length=32)
     minimum = models.DecimalField(max_digits=12, decimal_places=3)
+    maximum = models.DecimalField(max_digits=12, decimal_places=3, null=True, blank=True)
     topup_hours = models.PositiveIntegerField()
     price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     route = models.JSONField(default=list, blank=True)
@@ -32,6 +33,10 @@ class Product(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(condition=models.Q(minimum__gt=0), name="product_minimum_positive"),
+            models.CheckConstraint(
+                condition=models.Q(maximum__isnull=True) | models.Q(maximum__gte=models.F("minimum")),
+                name="product_maximum_gte_minimum",
+            ),
             models.CheckConstraint(condition=models.Q(topup_hours__gt=0), name="product_topup_hours_positive"),
         ]
 

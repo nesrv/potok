@@ -77,6 +77,7 @@ class ProductIn(Schema):
     description: str
     unit: str
     minimum: Decimal
+    maximum: Decimal | None = None
     topup_hours: int
     price: Decimal | None = None
 
@@ -84,6 +85,7 @@ class ProductIn(Schema):
 class ProductPatch(Schema):
     description: str | None = None
     minimum: Decimal | None = None
+    maximum: Decimal | None = None
     topup_hours: int | None = None
 
 
@@ -250,6 +252,20 @@ def token(request, payload: TokenIn):
     return {"token": issue_token(user)}
 
 
+def _city_only(line: str) -> str:
+    skip = ("край", "область", "республика", "округ", "район", "россия", "федерац")
+    for part in (item.strip() for item in line.split(",")):
+        low = part.lower()
+        if not part or any(word in low for word in skip):
+            continue
+        for prefix in ("город ", "г. ", "г "):
+            if low.startswith(prefix):
+                part = part[len(prefix):].strip()
+                break
+        return part
+    return line.split(",")[0].strip()
+
+
 def _short_address(line: str) -> str:
     line = line.replace("муниципальный округ", "м.о.").replace("городской округ", "г.о.")
     kept = []
@@ -279,7 +295,7 @@ def _suggest_yandex(text: str) -> list[str]:
     for item in _yandex_members(text, 6):
         geo = item.get("GeoObject") or {}
         meta = (geo.get("metaDataProperty") or {}).get("GeocoderMetaData") or {}
-        line = _short_address(meta.get("text") or geo.get("name") or "")
+        line = _city_only(meta.get("text") or geo.get("name") or "")
         if line and line not in rows:
             rows.append(line)
     return rows
@@ -304,7 +320,7 @@ def _suggest_places(text: str) -> list[str]:
         return []
     rows = []
     for item in payload:
-        line = _short_address(item.get("display_name") or "")
+        line = _city_only(item.get("display_name") or "")
         if line and line not in rows:
             rows.append(line)
     return rows
@@ -337,7 +353,7 @@ def _locality(lat: float, lon: float) -> str:
     if members:
         meta = ((members[0].get("GeoObject") or {}).get("metaDataProperty") or {}).get("GeocoderMetaData") or {}
         components = (meta.get("Address") or {}).get("Components") or []
-        for kind in ("locality", "district", "province"):
+        for kind in ("locality",):
             for part in components:
                 if part.get("kind") == kind and part.get("name"):
                     return part["name"]
@@ -375,14 +391,14 @@ def geo_place(request, q: str = ""):
         meta = (geo.get("metaDataProperty") or {}).get("GeocoderMetaData") or {}
         if lat and lon:
             return {
-                "label": _short_address(meta.get("text") or geo.get("name") or text),
+                "label": _city_only(meta.get("text") or geo.get("name") or text),
                 "lat": float(lat),
                 "lon": float(lon),
             }
     point = _geocode(text)
     if point is None:
         raise OrderError(404, "населённый пункт не найден")
-    return {"label": text, "lat": point[0], "lon": point[1]}
+    return {"label": _city_only(text), "lat": point[0], "lon": point[1]}
 
 
 @router.get("/geo/here", auth=None)
@@ -532,6 +548,7 @@ def storefront_detail(request, storefront_id: int):
                 "description": product.description,
                 "unit": product.unit,
                 "minimum": str(product.minimum),
+                "maximum": None if product.maximum is None else str(product.maximum),
                 "topup_hours": product.topup_hours,
                 "districts": [link.district.name for link in product.product_districts.all()],
                 "photo": _photo_url(request, photo) if photo else "",
@@ -566,11 +583,14 @@ def create_product(request, payload: ProductIn):
         raise OrderError(400, "нужна единица измерения")
     if payload.minimum <= 0 or payload.topup_hours <= 0:
         raise OrderError(400, "минимум и окно X должны быть больше нуля")
+    if payload.maximum is not None and payload.maximum < payload.minimum:
+        raise OrderError(400, "максимум не может быть меньше минимума")
     product = Product.objects.create(
         storefront=storefront,
         description=payload.description.strip(),
         unit=payload.unit.strip(),
         minimum=payload.minimum,
+        maximum=payload.maximum,
         topup_hours=payload.topup_hours,
         price=payload.price,
     )
@@ -593,11 +613,19 @@ def patch_product(request, product_id: int, payload: ProductPatch):
         product.save(update_fields=["topup_hours"])
     if payload.minimum is not None:
         apply_minimum(product, payload.minimum)
+        product.refresh_from_db()
+    if "maximum" in payload.model_dump(exclude_unset=True):
+        cap = payload.maximum
+        if cap is not None and cap < product.minimum:
+            raise OrderError(400, "максимум не может быть меньше минимума")
+        product.maximum = cap
+        product.save(update_fields=["maximum"])
     product.refresh_from_db()
     return {
         "id": product.pk,
         "description": product.description,
         "minimum": str(product.minimum),
+        "maximum": None if product.maximum is None else str(product.maximum),
         "topup_hours": product.topup_hours,
         "unit": product.unit,
     }
@@ -661,6 +689,7 @@ def product_detail(request, product_id: int):
         "description": product.description,
         "unit": product.unit,
         "minimum": str(product.minimum),
+        "maximum": None if product.maximum is None else str(product.maximum),
         "topup_hours": product.topup_hours,
         "photos": photos,
         "price": None if product.price is None else str(product.price),

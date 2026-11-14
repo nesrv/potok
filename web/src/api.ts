@@ -51,6 +51,7 @@ export type Progress = {
   buyers: number | null;
   quantity: string | null;
   minimum: string | null;
+  maximum?: string | null;
   remaining: string | null;
   cancel_blocked: boolean | null;
   topup_ends_at: string | null;
@@ -62,6 +63,7 @@ export type ProductCard = {
   description: string;
   unit: string;
   minimum: string;
+  maximum?: string | null;
   topup_hours: number;
   price?: string | null;
   photos: { id: number; url: string }[];

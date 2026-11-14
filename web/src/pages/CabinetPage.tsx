@@ -61,6 +61,7 @@ export function CabinetPage() {
   const [description, setDescription] = useState("");
   const [unit, setUnit] = useState("кг");
   const [minimum, setMinimum] = useState("10");
+  const [maximum, setMaximum] = useState("");
   const [hours, setHours] = useState("2");
   const [price, setPrice] = useState("");
   const [districts, setDistricts] = useState("Анапа");
@@ -259,6 +260,7 @@ export function CabinetPage() {
           description,
           unit,
           minimum,
+          maximum: maximum.trim() ? maximum : null,
           topup_hours: Number(hours),
           price: price.trim() ? price : null,
         }),
@@ -372,6 +374,10 @@ export function CabinetPage() {
             <label className="field">
               <span>Минимум для сбора</span>
               <input value={minimum} onChange={(event) => setMinimum(event.target.value)} required />
+            </label>
+            <label className="field">
+              <span>Максимум, который можете привезти</span>
+              <input value={maximum} onChange={(event) => setMaximum(event.target.value)} placeholder="Не больше этого количества" />
             </label>
             <label className="field">
               <span>Окно дозаказа, часы</span>

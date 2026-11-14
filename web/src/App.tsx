@@ -92,26 +92,6 @@ function Shell({ children }: { children: React.ReactNode }) {
   const home = location.pathname === "/";
   return (
     <div className="wrap">
-      {home && (
-        <div className="corner-auth">
-          {signedIn ? (
-            <>
-              <ShopLabel />
-              <button
-                type="button"
-                onClick={() => {
-                  setToken(null);
-                  navigate("/");
-                }}
-              >
-                Выйти
-              </button>
-            </>
-          ) : (
-            <Link to="/login">Войти</Link>
-          )}
-        </div>
-      )}
       {!home && (
         <header className="bar">
           <Link to="/">Поток</Link>
