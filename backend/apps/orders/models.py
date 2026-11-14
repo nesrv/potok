@@ -45,3 +45,10 @@ class OrderLine(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(quantity__gt=0), name="line_quantity_positive"),
         ]
+
+
+class LineMessage(models.Model):
+    line = models.ForeignKey(OrderLine, on_delete=models.CASCADE, related_name="messages")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="line_messages")
+    text = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)

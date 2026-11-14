@@ -83,15 +83,24 @@ function Shell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const signedIn = Boolean(getToken());
   const [shopTitle, setShopTitle] = useState("лавка");
+  const [supplier, setSupplier] = useState(false);
   useEffect(() => {
     if (!signedIn) return;
     api<{ title?: string; owner_id: number }[]>("/api/storefronts")
-      .then((rows) => setShopTitle(rows.find((row) => row.owner_id === userId())?.title || "лавка"))
-      .catch(() => setShopTitle("лавка"));
+      .then((rows) => {
+        const mine = rows.find((row) => row.owner_id === userId());
+        setSupplier(Boolean(mine));
+        setShopTitle(mine?.title || "лавка");
+      })
+      .catch(() => {
+        setSupplier(false);
+        setShopTitle("лавка");
+      });
   }, [signedIn, location.pathname]);
   const home = location.pathname === "/";
   return (
     <div className="wrap">
+      <p className="free-note">Сервис бесплатный до 2027 года</p>
       {!home && (
         <header className="bar">
           <Link to="/">Поток</Link>
@@ -99,6 +108,10 @@ function Shell({ children }: { children: React.ReactNode }) {
             {signedIn ? (
               <>
                 <ShopLabel />
+                <span className="roles">
+                  <em>Покупатель</em>
+                  {supplier && <em>Поставщик</em>}
+                </span>
                 <button
                   className="ghost"
                   onClick={() => {

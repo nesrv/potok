@@ -54,6 +54,36 @@ def progress(order: GroupOrder | None, product: Product) -> dict:
     }
 
 
+@transaction.atomic
+def close_now(product: Product, user) -> dict:
+    now = timezone.now()
+    product = Product.objects.select_for_update().select_related("storefront").get(pk=product.pk)
+    if product.storefront.owner_id != user.pk:
+        raise OrderError(403, "чужой товар")
+    order = (
+        GroupOrder.objects.select_for_update()
+        .filter(product=product, status__in=OPEN)
+        .first()
+    )
+    if order is None:
+        raise OrderError(409, "открытого сбора нет")
+    if order.quantity <= 0:
+        raise OrderError(400, "в заказе ещё никого нет")
+    order.status = GroupOrder.CLOSED
+    order.unit_snapshot = product.unit
+    order.minimum_snapshot = product.minimum
+    order.save(update_fields=["status", "unit_snapshot", "minimum_snapshot"])
+    text = (
+        "Продавец закрыл сбор досрочно и отправит уже набранное. "
+        "Отказаться от заказа нельзя."
+    )
+    district_ids = ProductDistrict.objects.filter(product=product).values_list("district_id", flat=True)
+    DistrictNotice.objects.bulk_create(
+        [DistrictNotice(district_id=district_id, order=order, text=text) for district_id in district_ids]
+    )
+    return progress(order, product)
+
+
 def close_expired(product: Product, now=None) -> None:
     now = now or timezone.now()
     GroupOrder.objects.filter(
@@ -124,8 +154,8 @@ def add_line(product: Product, buyer, quantity: Decimal, district_id: int, addre
     if product.maximum is not None and order.quantity + quantity > product.maximum:
         left = product.maximum - order.quantity
         if left <= 0:
-            raise OrderError(400, "максимум уже набран, больше добавить нельзя")
-        raise OrderError(400, f"больше максимума, можно ещё {left} {product.unit}")
+            raise OrderError(400, "максимум уже набран, за время дозаказа больше добавить нельзя")
+        raise OrderError(400, f"максимум {product.maximum} {product.unit}, можно ещё {left}")
     OrderLine.objects.create(
         order=order,
         buyer=buyer,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../api";
+import { api, userId } from "../api";
+import { LineChat } from "./LineChat";
 
 type Order = {
   id: number;
@@ -32,12 +33,21 @@ export function OrderPage() {
         {order.status} · {order.quantity} {order.unit}
         {order.minimum ? ` · минимум был ${order.minimum}` : ""}
       </p>
+      {order.status !== "collecting" && <p className="stop-note">Стоп закупок. Отказаться от заказа нельзя.</p>}
       {order.topup_ends_at && <p>Окно до {new Date(order.topup_ends_at).toLocaleString()}</p>}
       <div className="stack">
         {order.lines.map((line) => (
-          <p key={line.id}>
-            Участник {line.buyer_id}: {line.quantity} · {line.address}
-          </p>
+          <div key={line.id} className="card product-sheet">
+            <div className="product-copy">
+              <p>
+                {line.buyer_id === userId() ? "Ваша заявка" : `Покупатель ${line.buyer_id}`}: {line.quantity} · {line.address}
+              </p>
+              <LineChat
+                lineId={line.id}
+                hint={line.buyer_id === userId() ? "Ответ продавцу" : "Спросить покупателя"}
+              />
+            </div>
+          </div>
         ))}
       </div>
     </section>

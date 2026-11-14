@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
+import { LineChat } from "./LineChat";
 
 type Line = {
   id: number;
@@ -45,19 +46,25 @@ export function MyOrdersPage() {
       )}
       <div className="stack">
         {rows.map((row) => (
-          <Link key={row.id} className="order-card" to={`/products/${row.product_id}`}>
-            <div>
-              <strong>{row.description}</strong>
-              <span>{row.farm}</span>
-              <em>{row.address}</em>
+          <article key={row.id} className="card product-sheet">
+            <div className="product-copy">
+              <Link className="order-card" to={`/products/${row.product_id}`}>
+                <div>
+                  <strong>{row.description}</strong>
+                  <span>{row.farm}</span>
+                  <em>{row.address}</em>
+                </div>
+                <div className="order-side">
+                  <b>
+                    {Number(row.quantity)} {row.unit}
+                  </b>
+                  <span>{statusName[row.status] || row.status}</span>
+                  {row.status !== "collecting" && <em className="stop-note">Стоп закупок. Отказаться нельзя.</em>}
+                </div>
+              </Link>
+              <LineChat lineId={row.id} hint="Переписка с продавцом" />
             </div>
-            <div className="order-side">
-              <b>
-                {Number(row.quantity)} {row.unit}
-              </b>
-              <span>{statusName[row.status] || row.status}</span>
-            </div>
-          </Link>
+          </article>
         ))}
       </div>
     </div>

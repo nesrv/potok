@@ -23,6 +23,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(max_length=32, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    delivery_address = models.CharField(max_length=500, blank=True)
+    delivery_lat = models.FloatField(null=True, blank=True)
+    delivery_lon = models.FloatField(null=True, blank=True)
 
     objects = UserManager()
 

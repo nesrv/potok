@@ -102,9 +102,11 @@ type Props = {
   route: number[][];
   selectedDistrictId: string;
   onSaved: () => void;
+  picking?: boolean;
+  onPoint?: (label: string, point: Point) => void;
 };
 
-export function DeliveryMap({ productId, ownerId, districts, route, selectedDistrictId, onSaved }: Props) {
+export function DeliveryMap({ productId, ownerId, districts, route, selectedDistrictId, onSaved, picking = false, onPoint }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const [full, setFull] = useState(false);
@@ -120,8 +122,15 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
   const canEdit = Boolean(getToken()) && userId() === ownerId;
   const district = districts.find((item) => String(item.id) === selectedDistrictId) || districts[0];
   const districtRef = useRef(district);
+  const districtsRef = useRef(districts);
+  districtsRef.current = districts;
   const routeRef = useRef(route);
   const persistRef = useRef<(points: Point[], kind: "polygon" | "route") => void>(() => {});
+  const pickRef = useRef(picking);
+  const onPointRef = useRef(onPoint);
+  const dropRef = useRef<Point | null>(null);
+  pickRef.current = picking;
+  onPointRef.current = onPoint;
   if (districtRef.current?.id !== district?.id) districtRef.current = district;
   persistRef.current = (points, kind) => {
     const districtId = districtRef.current?.id;
@@ -167,7 +176,25 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
       }).addTo(group);
     }
     const handles = editingArea ? area : path;
+    if (dropRef.current) {
+      L.marker(dropRef.current, {
+        interactive: false,
+        icon: L.divIcon({ className: "map-drop", iconSize: [18, 18], iconAnchor: [9, 9] }),
+      }).addTo(group);
+    }
     if (!canEdit) {
+      districtsRef.current.forEach((item) => {
+        const ring = (item.polygon || []) as Point[];
+        if (ring.length < 3 || item.id === districtRef.current?.id) return;
+        L.polygon(ring, {
+          color: "#1f9d45",
+          fillColor: "#1f9d45",
+          fillOpacity: 0.16,
+          interactive: false,
+          className: "map-shape",
+          pane: "shapes",
+        }).addTo(group);
+      });
       handles.forEach((point) => L.circleMarker(point, { radius: 4, color: editingArea ? "#1f9d45" : "#1a1a1a" }).addTo(group));
       return;
     }
@@ -251,7 +278,22 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
     }).addTo(map);
     layers.current = window.L.layerGroup().addTo(map);
     paint();
+    const chooseDrop = (point: Point) => {
+      dropRef.current = point;
+      paint();
+      setMessage("Ищем адрес…");
+      api<{ label: string }>(`/api/geo/point?lat=${point[0]}&lon=${point[1]}`)
+        .then((found) => {
+          onPointRef.current?.(found.label, point);
+          setMessage("Точка доставки выбрана");
+        })
+        .catch(() => {
+          onPointRef.current?.(`${point[0]}, ${point[1]}`, point);
+          setMessage("Точка поставлена. Адрес можно поправить вручную.");
+        });
+    };
     node.addEventListener("click", (event) => {
+      if (pickRef.current) return;
       if (!canEdit || modeRef.current !== "route") return;
       const target = event.target as HTMLElement;
       if (target.closest(".map-handle")) return;
@@ -266,8 +308,12 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
       persistRef.current(next, "route");
     });
     map.on("click", (event) => {
-      if (!canEdit || modeRef.current !== "polygon") return;
       const point: Point = [Number(event.latlng.lat.toFixed(6)), Number(event.latlng.lng.toFixed(6))];
+      if (pickRef.current) {
+        chooseDrop(point);
+        return;
+      }
+      if (!canEdit || modeRef.current !== "polygon") return;
       const base = draft.current.length
         ? draft.current
         : ((districtRef.current?.polygon || []) as Point[]);
@@ -332,7 +378,7 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
   }
 
   return (
-    <section className={full ? "card map-card full" : "card map-card"}>
+    <section className={full ? "card map-card full" : picking ? "card map-card picking" : "card map-card"}>
       <div className="section-head">
         <h2>Доставка на карте</h2>
         <button type="button" className="ghost" onClick={() => setFull((value) => !value)}>
@@ -340,11 +386,13 @@ export function DeliveryMap({ productId, ownerId, districts, route, selectedDist
         </button>
       </div>
       <p className="muted">
-        {canEdit
-          ? mode === "route"
-            ? "Маршрут: клик добавляет точку. Двойной клик или правая кнопка удаляет её."
-            : "Район: клик добавляет угол. Двойной клик или правая кнопка удаляет его."
-          : "Зелёным показан район, тёмной линией — маршрут продавца."}
+        {picking
+          ? "Кликните на карте, куда привезти заказ."
+          : canEdit
+            ? mode === "route"
+              ? "Маршрут: клик добавляет точку. Двойной клик или правая кнопка удаляет её."
+              : "Район: клик добавляет угол. Двойной клик или правая кнопка удаляет его."
+            : "Зелёным показан район, тёмной линией — маршрут продавца."}
       </p>
       {canEdit && (
         <div className="map-tools">

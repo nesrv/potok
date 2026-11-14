@@ -31,6 +31,7 @@ type Product = {
   unit: string;
   minimum: string;
   topup_hours: number;
+  maximum?: string | null;
   districts: string[];
   photo: string;
   status: string | null;
@@ -276,6 +277,16 @@ export function CabinetPage() {
     }
   }
 
+  async function closeEarly(productId: number) {
+    setError("");
+    try {
+      await api(`/api/products/${productId}/close`, { method: "POST" });
+      if (mine) await refresh(mine.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось закрыть сбор");
+    }
+  }
+
   async function upload(file: File) {
     if (!productId) return;
     const body = new FormData();
@@ -289,7 +300,24 @@ export function CabinetPage() {
     <div className="page">
       <div className="section-head">
         <h2>{label(mine?.title || title).mine} {label(mine?.title || title).word}</h2>
+        <p className="muted">
+          {mine
+            ? "Вы одновременно покупатель и поставщик. Свои товары здесь, чужие сборы — в «Моих заказах»."
+            : "Вы покупатель. Лавка добавит роль поставщика, заказы других хозяйств останутся."}
+        </p>
       </div>
+      {mine && (
+        <section className="card handover">
+          <h3>Как отдать заказ</h3>
+          <ol>
+            <li>На накладной подписаны вес и сумма. Покупатель сверяет оба числа до того, как заберёт товар.</li>
+            <li>Весы должны быть с вами. Перевес — при покупателе, расхождение записываете сразу.</li>
+            <li>На партии стоит дата забоя или сбора. Без даты товар не отдаёте.</li>
+            <li>После стопа закупок отказ не принимаете: состав уже закрыт.</li>
+            <li>В машину кладёте только набранное, в пределах от минимума до максимума.</li>
+          </ol>
+        </section>
+      )}
       {mine && (
         <form className="card place-form" onSubmit={savePlace}>
           <h3>Хозяйство</h3>
@@ -337,12 +365,13 @@ export function CabinetPage() {
               {products.length === 0 && <p className="muted">Товаров ещё нет. Добавьте первый сбор справа.</p>}
               <div className="cabinet-goods">
                 {products.map((product) => (
-                  <Link key={product.id} className="catalog-card" to={`/products/${product.id}`}>
+                  <div key={product.id} className="cabinet-item">
+                  <Link className="catalog-card" to={`/products/${product.id}`}>
                     {product.photo ? <img src={product.photo} alt="" /> : <div className="ph" />}
                     <div>
                       <strong>{product.description}</strong>
                       <span>
-                        Минимум {Number(product.minimum)} {product.unit} · дозаказ {product.topup_hours} ч
+                        От {Number(product.minimum)}{product.maximum ? ` до ${Number(product.maximum)}` : ""} {product.unit} · дозаказ {product.topup_hours} ч
                       </span>
                       <span>{product.districts.length ? product.districts.join(", ") : "Районы не указаны"}</span>
                       <em>
@@ -353,6 +382,12 @@ export function CabinetPage() {
                       </em>
                     </div>
                   </Link>
+                  {(product.status === "collecting" || product.status === "topup") && Number(product.quantity) > 0 && (
+                    <button type="button" className="ghost" onClick={() => void closeEarly(product.id)}>
+                      Отправить набранное сейчас
+                    </button>
+                  )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -376,8 +411,8 @@ export function CabinetPage() {
               <input value={minimum} onChange={(event) => setMinimum(event.target.value)} required />
             </label>
             <label className="field">
-              <span>Максимум, который можете привезти</span>
-              <input value={maximum} onChange={(event) => setMaximum(event.target.value)} placeholder="Не больше этого количества" />
+              <span>Максимум за время дозаказа</span>
+              <input value={maximum} onChange={(event) => setMaximum(event.target.value)} placeholder="Например, 30 при минимуме 20" required />
             </label>
             <label className="field">
               <span>Окно дозаказа, часы</span>
