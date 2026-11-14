@@ -43,47 +43,39 @@ function NearbyMap({
 }) {
   const node = useState<HTMLDivElement | null>(null);
   const [box, setBox] = node;
-  const [note, setNote] = useState(here ? "Ищем лавки в радиусе 80 км" : "Нужно местоположение");
+  const [note, setNote] = useState("Нажмите карту, чтобы указать место");
+  const anapa: [number, number] = [44.894, 37.316];
 
   useEffect(() => {
-    if (!box || !here) return;
-    let map: { destroy?: () => void } | null = null;
+    if (!box) return;
+    const center = here || anapa;
+    let map: { remove: () => void } | null = null;
     let cancelled = false;
-    api<{ yandex_key: string }>("/api/maps")
-      .then(async (config) => {
-        const shops = await api<Shop[]>(`/api/storefronts/nearby?lat=${here[0]}&lon=${here[1]}&km=80`);
-        if (cancelled) return;
-        setNote(shops.length ? `${shops.length} в радиусе 80 км` : "В радиусе 80 км лавок пока нет");
-        await loadYandex(config.yandex_key);
-        if (cancelled) return;
-        const ymaps = (window as unknown as { ymaps: Ymaps }).ymaps;
-        await new Promise<void>((resolve) => ymaps.ready(resolve));
-        map = new ymaps.Map(box, { center: here, zoom: 8, controls: ["zoomControl"] });
-        map.events.add("click", (event: { get: (name: string) => [number, number] }) => {
-          const coords = event.get("coords");
-          onPick([coords[0], coords[1]]);
-        });
-        const circle = new ymaps.Circle([here, 80000], {}, {
-          fillColor: "#1f9d4522",
-          strokeColor: "#1f9d45",
-          strokeWidth: 2,
-        });
-        map.geoObjects.add(circle);
-        map.geoObjects.add(new ymaps.Placemark(here, { balloonContent: label }, { preset: "islands#greenDotIcon" }));
+    setNote(here ? label : "Анапа. Нажмите, где вы находитесь");
+    loadLeaflet()
+      .then(async () => {
+        if (cancelled || !window.L) return;
+        const shops = here
+          ? await api<Shop[]>(`/api/storefronts/nearby?lat=${here[0]}&lon=${here[1]}&km=80`).catch(() => [])
+          : [];
+        if (cancelled || !window.L) return;
+        const leaflet = window.L;
+        const next = leaflet.map(box, { attributionControl: false });
+        map = next;
+        next.setView(center, here ? 10 : 12);
+        leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "" }).addTo(next);
+        if (here) leaflet.circleMarker(here, { radius: 8, color: "#1f9d45", fillColor: "#1f9d45", fillOpacity: 1 }).addTo(next);
         shops.forEach((shop) => {
-          map?.geoObjects.add(new ymaps.Placemark(
-            [shop.latitude, shop.longitude],
-            { balloonContent: `${shop.name}<br>${shop.title} · ${shop.km} км` },
-            { preset: "islands#greenIcon" },
-          ));
+          leaflet.circleMarker([shop.latitude, shop.longitude], { radius: 6, color: "#1a1a1a" }).addTo(next);
         });
-        const bounds = circle.geometry.getBounds();
-        if (bounds) map.setBounds(bounds, { checkZoomRange: true });
+        next.on("click", (event) => {
+          onPick([Number(event.latlng.lat.toFixed(6)), Number(event.latlng.lng.toFixed(6))]);
+        });
       })
       .catch(() => setNote("Карта не открылась"));
     return () => {
       cancelled = true;
-      map?.destroy?.();
+      map?.remove();
     };
   }, [box, here]);
 
@@ -112,6 +104,21 @@ type Ymaps = {
   Circle: new (geometry: unknown, props: object, opts: object) => { geometry: { getBounds: () => unknown } };
   Placemark: new (point: number[], props: object, opts: object) => unknown;
 };
+
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("leaflet"));
+    document.head.appendChild(script);
+  });
+}
 
 function loadYandex(key: string) {
   const existing = document.querySelector("script[data-ymaps]");
@@ -310,6 +317,7 @@ export function StorefrontsPage() {
               ))}
             </div>
           )}
+          <button type="button" className="place-map" onClick={() => setMapOpen(true)}>Выбрать на карте</button>
           <button type="submit" className="place-ok" aria-label="Это мой город">Ок</button>
         </form>
           {signedIn ? (
@@ -335,6 +343,7 @@ export function StorefrontsPage() {
           label={place}
           onClose={() => setMapOpen(false)}
           onPick={(point) => {
+            setMapOpen(false);
             api<{ label: string }>(`/api/geo/here?lat=${point[0]}&lon=${point[1]}`)
               .then((row) => remember(row.label || "Точка на карте", point))
               .catch(() => remember("Точка на карте", point));
