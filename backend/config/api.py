@@ -15,12 +15,13 @@ from ninja.files import UploadedFile
 from apps.accounts.models import User
 from apps.delivery.models import District, DistrictNotice, ProductDistrict
 from apps.orders.errors import OrderError
-from apps.orders.models import GroupOrder, OrderLine
+from apps.orders.models import GroupOrder, OrderLine, LineMessage
 from apps.orders.services import (
     add_line,
     apply_minimum,
     cancel_line,
     close_expired,
+    close_now,
     open_order,
     product_editable,
     progress,
@@ -95,8 +96,24 @@ class DistrictsIn(Schema):
 
 class LineIn(Schema):
     quantity: Decimal
-    district_id: int
+    district_id: int | None = None
     address: str
+    lat: float | None = None
+    lon: float | None = None
+
+
+def _inside(lat: float, lon: float, ring: list) -> bool:
+    if len(ring) < 3:
+        return True
+    inside = False
+    previous = ring[-1]
+    for current in ring:
+        yi, xi = float(current[0]), float(current[1])
+        yj, xj = float(previous[0]), float(previous[1])
+        if ((yi > lat) != (yj > lat)) and (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi):
+            inside = not inside
+        previous = current
+    return inside
 
 
 def _ring(lat: float, lon: float, km: float = 50, count: int = 8) -> list[list[float]]:
@@ -401,9 +418,45 @@ def geo_place(request, q: str = ""):
     return {"label": _city_only(text), "lat": point[0], "lon": point[1]}
 
 
+def _point_label(lat: float, lon: float) -> str:
+    members = _yandex_members(f"{lon},{lat}", 1)
+    if members:
+        geo = members[0].get("GeoObject") or {}
+        meta = (geo.get("metaDataProperty") or {}).get("GeocoderMetaData") or {}
+        line = _short_address(meta.get("text") or geo.get("name") or "")
+        if line:
+            return line
+    query = urllib.parse.urlencode({"lat": lat, "lon": lon, "format": "json", "zoom": 18, "addressdetails": 1})
+    request = urllib.request.Request(
+        f"https://nominatim.openstreetmap.org/reverse?{query}",
+        headers={"User-Agent": "potok/1.0 (programism.ru)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            payload = json.loads(response.read().decode())
+    except Exception:
+        return ""
+    address = payload.get("address") or {}
+    road = address.get("road") or address.get("pedestrian") or address.get("footway") or ""
+    house = address.get("house_number") or ""
+    street = " ".join(part for part in (road, house) if part).strip()
+    place = address.get("village") or address.get("town") or address.get("city") or address.get("hamlet") or ""
+    region = address.get("state") or ""
+    line = ", ".join(part for part in (street, place, region) if part)
+    return line or _short_address(payload.get("display_name") or "")
+
+
 @router.get("/geo/here", auth=None)
 def geo_here(request, lat: float, lon: float):
     return {"label": _locality(lat, lon)}
+
+
+@router.get("/geo/point", auth=None)
+def geo_point(request, lat: float, lon: float):
+    label = _point_label(lat, lon) or _locality(lat, lon)
+    if not label:
+        raise OrderError(404, "адрес по этой точке не найден")
+    return {"label": label, "lat": lat, "lon": lon}
 
 
 def _about(row: Storefront) -> str:
@@ -576,6 +629,12 @@ def storefront_detail(request, storefront_id: int):
     return place
 
 
+@router.post("/products/{product_id}/close", auth=auth)
+def close_product_order(request, product_id: int):
+    product = get_object_or_404(Product, pk=product_id)
+    return close_now(product, request.auth)
+
+
 @router.post("/products", auth=auth)
 def create_product(request, payload: ProductIn):
     storefront = get_object_or_404(Storefront, pk=payload.storefront_id, owner=request.auth)
@@ -583,7 +642,9 @@ def create_product(request, payload: ProductIn):
         raise OrderError(400, "нужна единица измерения")
     if payload.minimum <= 0 or payload.topup_hours <= 0:
         raise OrderError(400, "минимум и окно X должны быть больше нуля")
-    if payload.maximum is not None and payload.maximum < payload.minimum:
+    if payload.maximum is None:
+        raise OrderError(400, "нужен максимум: сколько успеете подготовить за время дозаказа")
+    if payload.maximum < payload.minimum:
         raise OrderError(400, "максимум не может быть меньше минимума")
     product = Product.objects.create(
         storefront=storefront,
@@ -739,7 +800,32 @@ def save_map(request, product_id: int, payload: MapIn):
 @router.post("/products/{product_id}/lines", auth=auth)
 def create_line(request, product_id: int, payload: LineIn):
     product = get_object_or_404(Product, pk=product_id)
-    state = add_line(product, request.auth, payload.quantity, payload.district_id, payload.address)
+    links = list(product.product_districts.select_related("district"))
+    if not links:
+        raise OrderError(400, "у товара нет района доставки")
+    if payload.lat is not None and payload.lon is not None:
+        point = (payload.lat, payload.lon)
+    else:
+        point = _geocode(payload.address)
+    zoned = [link for link in links if len(link.district.polygon or []) >= 3]
+    if zoned:
+        if point is None:
+            raise OrderError(400, "выберите адрес из зоны доставки")
+        link = next((item for item in zoned if _inside(point[0], point[1], item.district.polygon)), None)
+        if link is None:
+            raise OrderError(400, "выберите адрес из зоны доставки")
+    else:
+        link = links[0]
+    state = add_line(product, request.auth, payload.quantity, link.district_id, payload.address)
+    buyer = request.auth
+    buyer.delivery_address = payload.address.strip()
+    if payload.lat is not None and payload.lon is not None:
+        buyer.delivery_lat = payload.lat
+        buyer.delivery_lon = payload.lon
+    elif point is not None:
+        buyer.delivery_lat = point[0]
+        buyer.delivery_lon = point[1]
+    buyer.save(update_fields=["delivery_address", "delivery_lat", "delivery_lon"])
     return state
 
 
@@ -748,6 +834,58 @@ def delete_line(request, line_id: int):
     line = get_object_or_404(OrderLine, pk=line_id)
     cancel_line(line, request.auth)
     return {"ok": True}
+
+
+def _line_for_chat(line_id: int, user):
+    line = get_object_or_404(
+        OrderLine.objects.select_related("order__product__storefront"),
+        pk=line_id,
+    )
+    owner = line.order.product.storefront.owner_id == user.pk
+    if not owner and line.buyer_id != user.pk:
+        raise OrderError(403, "переписка недоступна")
+    return line
+
+
+class MessageIn(Schema):
+    text: str
+
+
+@router.get("/lines/{line_id}/messages", auth=auth)
+def line_messages(request, line_id: int):
+    line = _line_for_chat(line_id, request.auth)
+    return [
+        {
+            "id": message.pk,
+            "author_id": message.author_id,
+            "mine": message.author_id == request.auth.pk,
+            "text": message.text,
+            "created_at": message.created_at,
+        }
+        for message in line.messages.order_by("id")
+    ]
+
+
+@router.post("/lines/{line_id}/messages", auth=auth)
+def post_line_message(request, line_id: int, payload: MessageIn):
+    line = _line_for_chat(line_id, request.auth)
+    text = payload.text.strip()
+    if not text or len(text) > 500:
+        raise OrderError(400, "напишите сообщение до 500 символов")
+    message = LineMessage.objects.create(line=line, author=request.auth, text=text)
+    return {"id": message.pk, "mine": True, "text": message.text, "author_id": request.auth.pk}
+
+
+@router.get("/me/delivery", auth=auth)
+def my_delivery(request):
+    buyer = request.auth
+    address = buyer.delivery_address
+    lat = buyer.delivery_lat
+    lon = buyer.delivery_lon
+    if not address:
+        last = OrderLine.objects.filter(buyer=buyer).order_by("-id").first()
+        address = last.address if last else ""
+    return {"address": address, "lat": lat, "lon": lon}
 
 
 @router.get("/me/lines", auth=auth)
