@@ -6,6 +6,7 @@ from apps.storefronts.models import Product, Storefront
 class District(models.Model):
     storefront = models.ForeignKey(Storefront, on_delete=models.CASCADE, related_name="districts")
     name = models.CharField(max_length=200)
+    polygon = models.JSONField(default=list, blank=True)
 
     class Meta:
         constraints = [

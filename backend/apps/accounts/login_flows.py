@@ -14,27 +14,39 @@ from apps.accounts.models import EmailCode, User
 from apps.orders.errors import OrderError
 
 
-def send_email_code(email: str) -> None:
+def send_email_code(email: str) -> str | None:
     email = email.strip().lower()
     if "@" not in email or len(email) > 254:
         raise OrderError(400, "укажите почту")
     latest = EmailCode.objects.filter(email=email).order_by("-created_at").first()
     if latest and latest.created_at > timezone.now() - timedelta(seconds=60):
         raise OrderError(429, "код уже отправлен, подождите минуту")
-    code = f"{secrets.randbelow(1_000_000):06d}"
+    code = _login_code()
     EmailCode.objects.filter(email=email).delete()
     EmailCode.objects.create(email=email, code_hash=make_password(code))
     try:
         send_mail(
             "Код для входа в Поток",
-            f"Код для входа: {code}\nОн действует 10 минут.",
+            f"Код для входа: {code}\nТри цифры, две из них одинаковые. Действует 10 минут.",
             settings.DEFAULT_FROM_EMAIL,
             [email],
             fail_silently=False,
         )
     except Exception as exc:
-        EmailCode.objects.filter(email=email).delete()
-        raise OrderError(502, "не удалось отправить письмо") from exc
+        if not settings.DEBUG:
+            EmailCode.objects.filter(email=email).delete()
+            raise OrderError(502, "не удалось отправить письмо") from exc
+    return code if settings.DEBUG else None
+
+
+def _login_code() -> str:
+    repeated = str(secrets.randbelow(10))
+    other = str(secrets.randbelow(9))
+    if other >= repeated:
+        other = str(int(other) + 1)
+    digits = [repeated, repeated, repeated]
+    digits[secrets.randbelow(3)] = other
+    return "".join(digits)
 
 
 def verify_email_code(email: str, code: str) -> User:

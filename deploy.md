@@ -83,6 +83,14 @@ python3 manage.py runserver 0.0.0.0:8000
 
 Остановить сервер: Ctrl+C в том же окне Ubuntu.
 
+Перед выкладкой кода скачать данные прода на локальную машину. С сервера берётся только база `potok` и каталог `backend/media`. Другие базы Postgres и локальный `.env` не меняются.
+
+```powershell
+powershell -File scripts/pull-prod-data.ps1
+```
+
+Дамп попадает в `backend/prod.dump`, фото — в `backend/media`. Локальная база `potok` на WSL заменяется этим дампом.
+
 На сервере тот же каталог, переменные `DATABASE_URL`, `DJANGO_SECRET_KEY`, `JWT_SECRET`, `MEDIA_ROOT`. Процесс: `gunicorn config.wsgi:application -w 1 --max-requests 400 --max-requests-jitter 40 -b 127.0.0.1:8011`. Один воркер, чтобы не занимать лишнюю память на общем VPS. Снаружи nginx на `potok.h1n.ru`: API проксируется на gunicorn, `/media/` читается с диска.
 
 

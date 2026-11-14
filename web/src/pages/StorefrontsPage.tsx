@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ProductCard } from "../api";
 
@@ -28,6 +28,106 @@ const nearby = [
   { name: "Солнечная грядка", line: "Овощи, зелень", cover: "/farm-tomatoes.jpg" },
 ];
 
+type Shop = { id: number; name: string; title: string; latitude: number; longitude: number; km: number };
+
+function NearbyMap({
+  here,
+  label,
+  onClose,
+  onPick,
+}: {
+  here: [number, number] | null;
+  label: string;
+  onClose: () => void;
+  onPick: (point: [number, number]) => void;
+}) {
+  const node = useState<HTMLDivElement | null>(null);
+  const [box, setBox] = node;
+  const [note, setNote] = useState(here ? "Ищем лавки в радиусе 80 км" : "Нужно местоположение");
+
+  useEffect(() => {
+    if (!box || !here) return;
+    let map: { destroy?: () => void } | null = null;
+    let cancelled = false;
+    api<{ yandex_key: string }>("/api/maps")
+      .then(async (config) => {
+        const shops = await api<Shop[]>(`/api/storefronts/nearby?lat=${here[0]}&lon=${here[1]}&km=80`);
+        if (cancelled) return;
+        setNote(shops.length ? `${shops.length} в радиусе 80 км` : "В радиусе 80 км лавок пока нет");
+        await loadYandex(config.yandex_key);
+        if (cancelled) return;
+        const ymaps = (window as unknown as { ymaps: Ymaps }).ymaps;
+        await new Promise<void>((resolve) => ymaps.ready(resolve));
+        map = new ymaps.Map(box, { center: here, zoom: 8, controls: ["zoomControl"] });
+        map.events.add("click", (event: { get: (name: string) => [number, number] }) => {
+          const coords = event.get("coords");
+          onPick([coords[0], coords[1]]);
+        });
+        const circle = new ymaps.Circle([here, 80000], {}, {
+          fillColor: "#1f9d4522",
+          strokeColor: "#1f9d45",
+          strokeWidth: 2,
+        });
+        map.geoObjects.add(circle);
+        map.geoObjects.add(new ymaps.Placemark(here, { balloonContent: label }, { preset: "islands#greenDotIcon" }));
+        shops.forEach((shop) => {
+          map?.geoObjects.add(new ymaps.Placemark(
+            [shop.latitude, shop.longitude],
+            { balloonContent: `${shop.name}<br>${shop.title} · ${shop.km} км` },
+            { preset: "islands#greenIcon" },
+          ));
+        });
+        const bounds = circle.geometry.getBounds();
+        if (bounds) map.setBounds(bounds, { checkZoomRange: true });
+      })
+      .catch(() => setNote("Карта не открылась"));
+    return () => {
+      cancelled = true;
+      map?.destroy?.();
+    };
+  }, [box, here]);
+
+  return (
+    <div className="map-layer" role="dialog" aria-label="Лавки рядом">
+      <div className="map-sheet">
+        <div className="map-bar">
+          <strong>80 км. Нажмите карту, чтобы перенести точку</strong>
+          <span>{note}</span>
+          <button type="button" onClick={onClose}>Закрыть</button>
+        </div>
+        <div className="map-canvas" ref={setBox} />
+      </div>
+    </div>
+  );
+}
+
+type Ymaps = {
+  ready: (cb: () => void) => void;
+  Map: new (node: HTMLElement, state: object) => {
+    geoObjects: { add: (item: unknown) => void };
+    events: { add: (name: string, cb: (event: { get: (key: string) => [number, number] }) => void) => void };
+    setBounds: (b: unknown, o: object) => void;
+    destroy: () => void;
+  };
+  Circle: new (geometry: unknown, props: object, opts: object) => { geometry: { getBounds: () => unknown } };
+  Placemark: new (point: number[], props: object, opts: object) => unknown;
+};
+
+function loadYandex(key: string) {
+  const existing = document.querySelector("script[data-ymaps]");
+  if ((window as unknown as { ymaps?: Ymaps }).ymaps) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const script = existing || document.createElement("script");
+    script.addEventListener("load", () => resolve());
+    script.addEventListener("error", () => reject(new Error("ymaps")));
+    if (!existing) {
+      script.setAttribute("data-ymaps", "1");
+      script.src = `https://api-maps.yandex.ru/2.1/?apikey=${key}&lang=ru_RU`;
+      document.head.appendChild(script);
+    }
+  });
+}
+
 function matches(text: string, words: string[]) {
   const value = text.toLowerCase();
   return words.some((word) => value.includes(word));
@@ -38,7 +138,50 @@ export function StorefrontsPage() {
   const [farms, setFarms] = useState<Storefront[]>([]);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [place, setPlace] = useState("Укажите населённый пункт");
+  const [draft, setDraft] = useState("");
+  const [hints, setHints] = useState<string[]>([]);
+  const hintRequest = useRef(0);
+  const [here, setHere] = useState<[number, number] | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const [category, setCategory] = useState("");
+
+  function remember(label: string, point: [number, number]) {
+    setPlace(label);
+    setDraft(label);
+    setHere(point);
+    setHints([]);
+    localStorage.setItem("potok_place", JSON.stringify({ label, lat: point[0], lon: point[1] }));
+  }
+
+  useEffect(() => {
+    const saved = localStorage.getItem("potok_place");
+    if (saved) {
+      try {
+        const row = JSON.parse(saved) as { label: string; lat: number; lon: number };
+        setPlace(row.label);
+        setDraft(row.label);
+        setHere([row.lat, row.lon]);
+        return;
+      } catch {
+        localStorage.removeItem("potok_place");
+      }
+    }
+    if (!navigator.geolocation) {
+      setPlace("Укажите населённый пункт");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const point: [number, number] = [position.coords.latitude, position.coords.longitude];
+        setHere(point);
+        api<{ label: string }>(`/api/geo/here?lat=${point[0]}&lon=${point[1]}`)
+          .then((row) => setPlace(row.label || "Место не определилось"))
+          .catch(() => setPlace("Место не определилось"));
+      },
+      () => setPlace("Разрешите доступ к местоположению"),
+    );
+  }, []);
 
   useEffect(() => {
     api<Storefront[]>("/api/storefronts")
@@ -93,8 +236,75 @@ export function StorefrontsPage() {
   return (
     <div className="home">
       <header className="hero">
-        <img className="header-art" src="/header.png?v=3" alt="Поток. Совместные закупки у фермеров" />
+        <form
+          className="place-line"
+          onSubmit={(event) => {
+            event.preventDefault();
+            api<{ label: string; lat: number; lon: number }>(`/api/geo/place?q=${encodeURIComponent(draft)}`)
+              .then((row) => remember(row.label, [row.lat, row.lon]))
+              .catch(() => setPlace("Населённый пункт не найден"));
+          }}
+        >
+          <input
+            value={draft}
+            placeholder="Населённый пункт"
+            onChange={(event) => {
+              const value = event.target.value;
+              setDraft(value);
+              const requestId = ++hintRequest.current;
+              if (value.trim().length < 2) {
+                setHints([]);
+                return;
+              }
+              window.setTimeout(() => {
+                if (requestId !== hintRequest.current) return;
+                api<string[]>(`/api/geo/suggest?q=${encodeURIComponent(value)}`)
+                  .then((rows) => {
+                    if (requestId === hintRequest.current) setHints(rows);
+                  })
+                  .catch(() => {
+                    if (requestId === hintRequest.current) setHints([]);
+                  });
+              }, 250);
+            }}
+          />
+          {hints.length > 0 && (
+            <div className="place-hints">
+              {hints.map((hint) => (
+                <button
+                  key={hint}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setDraft(hint);
+                    setHints([]);
+                    api<{ label: string; lat: number; lon: number }>(`/api/geo/place?q=${encodeURIComponent(hint)}`)
+                      .then((row) => remember(row.label, [row.lat, row.lon]))
+                      .catch(() => setPlace("Населённый пункт не найден"));
+                  }}
+                >
+                  {hint}
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="submit">Это мой город</button>
+        </form>
+        <img className="header-art" src="/potok-header.png?v=1" alt="Поток. Совместные закупки у фермеров" />
       </header>
+      {mapOpen && (
+        <NearbyMap
+          here={here}
+          label={place}
+          onClose={() => setMapOpen(false)}
+          onPick={(point) => {
+            api<{ label: string }>(`/api/geo/here?lat=${point[0]}&lon=${point[1]}`)
+              .then((row) => remember(row.label || "Точка на карте", point))
+              .catch(() => remember("Точка на карте", point));
+          }}
+        />
+      )}
+      <div className="search-row">
       <label className="search">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="6.5" fill="none" stroke="#9aa096" strokeWidth="1.8" />
@@ -120,6 +330,8 @@ export function StorefrontsPage() {
           </svg>
         </button>
       </label>
+      <button type="button" className="map-link" onClick={() => setMapOpen(true)}>Показать на карте</button>
+      </div>
       <div className="cats">
         {categories.map((item) => (
           <button
@@ -181,7 +393,7 @@ export function StorefrontsPage() {
       </div>
       <div className="section-head">
         <h2>Фермеры рядом</h2>
-        <Link to="/catalog">Смотреть все →</Link>
+        <Link to="/shops">Смотреть все →</Link>
       </div>
       <div className="farms">
         {nearby.map((farm) => {

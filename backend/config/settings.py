@@ -126,3 +126,7 @@ EMAIL_BACKEND = (
 VK_CLIENT_ID = os.environ.get("VK_CLIENT_ID") or os.environ.get("VK_APP_ID", "")
 VK_CLIENT_SECRET = os.environ.get("VK_CLIENT_SECRET") or os.environ.get("VK_APP_SECRET", "")
 VK_REDIRECT_URI = os.environ.get("VK_REDIRECT_URI", "https://programism.ru/auth/vk/callback/")
+YANDEX_MAPS_API_KEY = os.environ.get("YANDEX_MAPS_API_KEY", "")
+YANDEX_MAPS_API_SECRET = os.environ.get("YANDEX_MAPS_API_SECRET", "")
+YANDEX_GEOCODER_API_KEY = os.environ.get("YANDEX_GEOCODER_API_KEY", "")
+YANDEX_GEOCODER_API_SECRET = os.environ.get("YANDEX_GEOCODER_API_SECRET", "")

@@ -1,11 +1,14 @@
+import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { getToken, setToken } from "./api";
+import { api, getToken, setToken, userId } from "./api";
 import { AuthPage, VkCallback } from "./pages/AuthPage";
 import { CabinetPage } from "./pages/CabinetPage";
 import { CatalogPage } from "./pages/CatalogPage";
+import { MyOrdersPage } from "./pages/MyOrdersPage";
 import { OrderPage } from "./pages/OrderPage";
 import { ProductPage } from "./pages/ProductPage";
 import { StorefrontPage } from "./pages/StorefrontPage";
+import { ShopsPage } from "./pages/ShopsPage";
 import { StorefrontsPage } from "./pages/StorefrontsPage";
 
 function TabIcon({ name }: { name: string }) {
@@ -14,6 +17,16 @@ function TabIcon({ name }: { name: string }) {
     return (
       <svg viewBox="0 0 24 24">
         <path fill="currentColor" d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" />
+      </svg>
+    );
+  }
+  if (name === "farms") {
+    return (
+      <svg {...common}>
+        <circle cx="8" cy="9" r="2" />
+        <circle cx="16" cy="9" r="2" />
+        <path d="M4.5 17.5c.6-2 2-3 3.5-3s2.9 1 3.5 3" />
+        <path d="M12.5 17.5c.6-2 2-3 3.5-3s2.9 1 3.5 3" />
       </svg>
     );
   }
@@ -52,25 +65,48 @@ function TabIcon({ name }: { name: string }) {
   );
 }
 
+function ShopLabel() {
+  const [name, setName] = useState("");
+  const signedIn = Boolean(getToken());
+  useEffect(() => {
+    if (!signedIn) return;
+    api<{ name: string; owner_id: number }[]>("/api/storefronts")
+      .then((rows) => setName(rows.find((row) => row.owner_id === userId())?.name || ""))
+      .catch(() => setName(""));
+  }, [signedIn]);
+  if (!name) return null;
+  return <span className="who">{name}</span>;
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const signedIn = Boolean(getToken());
+  const [shopTitle, setShopTitle] = useState("лавка");
+  useEffect(() => {
+    if (!signedIn) return;
+    api<{ title?: string; owner_id: number }[]>("/api/storefronts")
+      .then((rows) => setShopTitle(rows.find((row) => row.owner_id === userId())?.title || "лавка"))
+      .catch(() => setShopTitle("лавка"));
+  }, [signedIn, location.pathname]);
   const home = location.pathname === "/";
   return (
     <div className="wrap">
       {home && (
         <div className="corner-auth">
           {signedIn ? (
-            <button
-              type="button"
-              onClick={() => {
-                setToken(null);
-                navigate("/");
-              }}
-            >
-              Выйти
-            </button>
+            <>
+              <ShopLabel />
+              <button
+                type="button"
+                onClick={() => {
+                  setToken(null);
+                  navigate("/");
+                }}
+              >
+                Выйти
+              </button>
+            </>
           ) : (
             <Link to="/login">Войти</Link>
           )}
@@ -81,15 +117,18 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link to="/">Поток</Link>
           <nav>
             {signedIn ? (
-              <button
-                className="ghost"
-                onClick={() => {
-                  setToken(null);
-                  navigate("/");
-                }}
-              >
-                Выйти
-              </button>
+              <>
+                <ShopLabel />
+                <button
+                  className="ghost"
+                  onClick={() => {
+                    setToken(null);
+                    navigate("/");
+                  }}
+                >
+                  Выйти
+                </button>
+              </>
             ) : (
               <Link to="/login">Войти</Link>
             )}
@@ -101,8 +140,9 @@ function Shell({ children }: { children: React.ReactNode }) {
         <Link to="/" className="tab-brand">Поток</Link>
         <Link to="/" className={home ? "on" : ""}><TabIcon name="home" />Главная</Link>
         <Link to="/catalog" className={location.pathname === "/catalog" ? "on" : ""}><TabIcon name="catalog" />Каталог</Link>
+        <Link to="/shops" className={location.pathname === "/shops" ? "on side-only" : "side-only"}><TabIcon name="farms" />Фермеры рядом</Link>
         <Link to={signedIn ? "/my-orders" : "/login"} className={location.pathname === "/my-orders" ? "on" : ""}><TabIcon name="orders" />Мои заказы</Link>
-        <Link to={signedIn ? "/cabinet" : "/login"} className={location.pathname === "/cabinet" ? "on" : ""}><TabIcon name="shop" />Моя витрина</Link>
+        <Link to={signedIn ? "/cabinet" : "/login"} className={location.pathname === "/cabinet" ? "on" : ""}><TabIcon name="shop" />{shopTitle === "магазин" || shopTitle === "прилавок" || shopTitle === "бутик" ? "Мой" : "Моя"} {shopTitle}</Link>
         <Link to={signedIn ? "/cabinet" : "/login"}><TabIcon name="profile" />Профиль</Link>
       </nav>
     </div>
@@ -124,11 +164,12 @@ export function App() {
         <Route path="/auth/vk/callback/" element={<VkCallback />} />
         <Route path="/" element={<StorefrontsPage />} />
         <Route path="/catalog" element={<CatalogPage />} />
+        <Route path="/shops" element={<ShopsPage />} />
         <Route path="/storefronts/:id" element={<StorefrontPage />} />
         <Route path="/products/:id" element={<ProductPage />} />
         <Route path="/orders/:id" element={<Private><OrderPage /></Private>} />
         <Route path="/cabinet" element={<Private><CabinetPage /></Private>} />
-        <Route path="/my-orders" element={<Private><p className="muted">Заявок пока нет. Откройте сбор и нажмите «Присоединиться».</p></Private>} />
+        <Route path="/my-orders" element={<Private><MyOrdersPage /></Private>} />
       </Routes>
     </Shell>
   );

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, getToken, ProductCard, userId } from "../api";
+import { DeliveryMap } from "./DeliveryMap";
 
 type Notice = { id: number; text: string; created_at: string };
 type OrderLine = { id: number; buyer_id: number; quantity: string; address: string };
@@ -92,60 +93,86 @@ export function ProductPage() {
   const quantityNow = Number(progress.quantity || 0);
   const width = minimum > 0 ? Math.min(100, (quantityNow / minimum) * 100) : 0;
 
+  const statusLabel = progress.status === "topup" ? "Дозаказ" : progress.status === "collecting" ? "Сбор" : "";
+
   return (
-    <div className="grid split">
-      <article className="card stack">
-        <div className="photos">
-          {card.photos.map((photo) => (
-            <img key={photo.id} src={photo.url} alt="" />
-          ))}
+    <div className="product">
+      <article className="card product-sheet">
+        <div className="product-photo">
+          {card.photos[0] ? <img src={card.photos[0].url} alt="" /> : <div className="product-photo ph" />}
+          <span>Совместная покупка</span>
         </div>
-        <h2>{card.description}</h2>
-        <p className="muted">
-          Минимум {card.minimum} {card.unit}. Окно дозаказа {card.topup_hours} ч.
-        </p>
-        {progress.status ? (
-          <>
-            <div className="bar-track"><span style={{ width: `${width}%` }} /></div>
-            <p>
-              {progress.status === "collecting" ? "Сбор" : "Дозаказ"} · {progress.buyers} чел. · набрано{" "}
-              {progress.quantity} {card.unit}
-              {progress.remaining && progress.status === "collecting" ? ` · ещё ${progress.remaining}` : ""}
-            </p>
-            {progress.topup_ends_at && <p>Дозаказать можно до {new Date(progress.topup_ends_at).toLocaleString()}</p>}
-            {progress.cancel_blocked && <p>Отмена закрыта. Эту партию привезут быстрее следующего сбора.</p>}
-            {progress.order_id && <Link to={`/orders/${progress.order_id}`}>Состав заказа</Link>}
-          </>
-        ) : (
-          <p>Открытого сбора нет.</p>
-        )}
-        {ownLines.length > 0 && progress.status === "collecting" && (
-          <div className="stack">
-            {ownLines.map((line) => (
-              <button key={line.id} className="ghost" onClick={() => cancel(line.id)}>
-                Отменить {line.quantity} {card.unit}
-              </button>
-            ))}
+        <div className="product-copy">
+          <div className="offer-top">
+            <h2>{card.description}</h2>
+            <b>{card.unit}</b>
           </div>
-        )}
+          <p className="muted">Минимум {Number(card.minimum)} {card.unit}. После минимума дозаказ ещё {card.topup_hours} ч.</p>
+          {progress.status ? (
+            <>
+              <p className="qty">
+                <strong>{quantityNow} {card.unit} из {minimum} {card.unit}</strong>
+                {progress.buyers != null && <span>Участвуют: {progress.buyers}</span>}
+              </p>
+              <div className="bar-track"><span style={{ width: `${width}%` }} /></div>
+              <p className="product-status">
+                {statusLabel}
+                {progress.remaining && progress.status === "collecting" ? ` · ещё ${Number(progress.remaining)} ${card.unit}` : ""}
+                {progress.status === "topup" ? " · минимум набран" : ""}
+              </p>
+              {progress.topup_ends_at && <p className="muted">Дозаказать можно до {new Date(progress.topup_ends_at).toLocaleString("ru")}</p>}
+              {progress.cancel_blocked && <p className="note">Отмена закрыта. Эту партию привезут быстрее следующего сбора.</p>}
+              {progress.order_id && getToken() && <Link className="text-link" to={`/orders/${progress.order_id}`}>Состав заказа</Link>}
+            </>
+          ) : (
+            <p className="muted">Открытого сбора нет. Первая заявка его начнёт.</p>
+          )}
+          {ownLines.length > 0 && progress.status === "collecting" && (
+            <div className="stack">
+              {ownLines.map((line) => (
+                <button key={line.id} className="ghost" type="button" onClick={() => cancel(line.id)}>
+                  Отменить {line.quantity} {card.unit}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </article>
-      <form className="card stack" onSubmit={order}>
-        <h3>Заявка</h3>
-        <input placeholder="Количество" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
-        <select value={districtId} onChange={(event) => setDistrictId(event.target.value)} required>
-          <option value="">Район</option>
-          {card.districts.map((district) => (
-            <option key={district.id} value={district.id}>{district.name}</option>
-          ))}
-        </select>
-        <textarea placeholder="Адрес точки" value={address} onChange={(event) => setAddress(event.target.value)} required />
+      <form className="card product-order" onSubmit={order}>
+        <h3>Присоединиться</h3>
+        <p className="muted">Укажите количество, район и точку. Оплата на этой странице не нужна.</p>
+        <label className="field">
+          <span>Количество, {card.unit}</span>
+          <input inputMode="decimal" placeholder="Например, 2" value={quantity} onChange={(event) => setQuantity(event.target.value)} required />
+        </label>
+        <label className="field">
+          <span>Район доставки</span>
+          <select value={districtId} onChange={(event) => setDistrictId(event.target.value)} required>
+            <option value="">Выберите район</option>
+            {card.districts.map((district) => (
+              <option key={district.id} value={district.id}>{district.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Точка</span>
+          <textarea placeholder="Улица, дом, подъезд" value={address} onChange={(event) => setAddress(event.target.value)} required />
+        </label>
         {error && <p className="error">{error}</p>}
-        {info && <p>{info}</p>}
-        <button type="submit">Заказать</button>
+        {info && <p className="ok">{info}</p>}
+        <button type="submit">Присоединиться</button>
         {notices.map((notice) => (
-          <p key={notice.id} className="muted">{notice.text}</p>
+          <p key={notice.id} className="note">{notice.text}</p>
         ))}
       </form>
+      <DeliveryMap
+        productId={card.id}
+        ownerId={card.owner_id}
+        districts={card.districts}
+        route={card.route || []}
+        selectedDistrictId={districtId}
+        onSaved={() => void load()}
+      />
     </div>
   );
 }

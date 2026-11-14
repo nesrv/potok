@@ -7,6 +7,7 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
+  const [localCode, setLocalCode] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -15,10 +16,12 @@ export function AuthPage() {
     setError("");
     setPending(true);
     try {
-      await api("/api/auth/email/send", {
+      const body = await api<{ code?: string }>("/api/auth/email/send", {
         method: "POST",
         body: JSON.stringify({ email }),
       });
+      setLocalCode(body.code || "");
+      if (body.code) setCode(body.code);
       setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось отправить код");
@@ -37,7 +40,7 @@ export function AuthPage() {
         body: JSON.stringify({ email, code }),
       });
       setToken(body.token);
-      navigate("/");
+      navigate("/cabinet");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Неверный код");
     } finally {
@@ -69,6 +72,7 @@ export function AuthPage() {
         required
         autoComplete="email"
       />
+      {sent && localCode && <p className="note">Локальный код: {localCode}</p>}
       {sent && (
         <input
           inputMode="numeric"

@@ -63,7 +63,10 @@ export type ProductCard = {
   unit: string;
   minimum: string;
   topup_hours: number;
+  price?: string | null;
   photos: { id: number; url: string }[];
-  districts: { id: number; name: string }[];
+  districts: { id: number; name: string; polygon?: number[][] }[];
+  route?: number[][];
+  owner_id?: number;
   progress: Progress;
 };

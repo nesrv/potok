@@ -20,6 +20,8 @@ https://programism.ru/
 
 ssh -v root@81.90.182.174 — при успехе ключ в C:\Users\user\.ssh\.
 
+Перед каждым деплоем на programism.ru сначала скачать новые данные прода на локальную машину: только база `potok` и `backend/media`. Чужие базы на VPS и локальный `.env` не затирать. Команда: `powershell -File scripts/pull-prod-data.ps1`. Код выкладывать после этого.
+
 
 deploy-frontend.md
 напииши здесь как запустить локально фронтенд
