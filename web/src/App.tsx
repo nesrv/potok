@@ -100,7 +100,6 @@ function Shell({ children }: { children: React.ReactNode }) {
   const home = location.pathname === "/";
   return (
     <div className="wrap">
-      <p className="free-note">Сервис бесплатный до 2027 года</p>
       {!home && (
         <header className="bar">
           <Link to="/">Поток</Link>

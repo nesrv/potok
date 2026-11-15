@@ -254,7 +254,7 @@ export function ProductPage() {
       </article>
       <form className="card product-order" onSubmit={order}>
         <h3>Присоединиться</h3>
-        <p className="muted">Укажите количество и точку внутри зоны на карте. Оплата на этой странице не нужна. Сервис бесплатный до 2027 года.</p>
+        <p className="muted">Укажите количество и точку внутри зоны на карте. Оплата на этой странице не нужна.</p>
         <label className="field">
           <span>Количество, {card.unit}</span>
           <input

@@ -68,9 +68,13 @@ TEMPLATES = [
     },
 ]
 
+def _env(name: str, default: str = "") -> str:
+    return os.environ.get(name, default).replace("\r", "").strip()
+
+
 DATABASES = {
     "default": config_from_url(
-        os.environ.get("DATABASE_URL", "postgres://potok:potok@localhost:5432/potok")
+        _env("DATABASE_URL", "postgres://potok:potok@localhost:5432/potok")
     )
 }
 
@@ -87,11 +91,12 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
-MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
+_media_root = _env("MEDIA_ROOT")
+MEDIA_ROOT = Path(_media_root) if _media_root else BASE_DIR / "media"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 CSRF_TRUSTED_ORIGINS = [
     origin
-    for origin in os.environ.get(
+    for origin in _env(
         "CSRF_TRUSTED_ORIGINS",
         "https://programism.ru,https://www.programism.ru",
     ).split(",")

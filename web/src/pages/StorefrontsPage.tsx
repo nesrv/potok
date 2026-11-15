@@ -163,6 +163,7 @@ export function StorefrontsPage() {
   const hintRequest = useRef(0);
   const [here, setHere] = useState<[number, number] | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [menu, setMenu] = useState(false);
   const [category, setCategory] = useState("");
 
   function remember(label: string, point: [number, number]) {
@@ -263,14 +264,30 @@ export function StorefrontsPage() {
   return (
     <div className="home">
       <header className="hero">
-        <div className="home-bar">
+        <div className={`home-bar${menu ? " open" : ""}`}>
+          <button
+            type="button"
+            className="burger"
+            aria-expanded={menu}
+            aria-label={menu ? "Закрыть меню" : "Меню"}
+            onClick={() => setMenu((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+          <span className="home-city">{draft || place}</span>
           {shop && <span className="who">{shop}</span>}
+          {menu && (
         <form
-          className="place-line"
+          className="place-line home-menu"
           onSubmit={(event) => {
             event.preventDefault();
             api<{ label: string; lat: number; lon: number }>(`/api/geo/place?q=${encodeURIComponent(draft)}`)
-              .then((row) => remember(row.label, [row.lat, row.lon]))
+              .then((row) => {
+                remember(row.label, [row.lat, row.lon]);
+                setMenu(false);
+              })
               .catch(() => setPlace("Населённый пункт не найден"));
           }}
         >
@@ -307,6 +324,7 @@ export function StorefrontsPage() {
                   onClick={() => {
                     setDraft(hint);
                     setHints([]);
+                    setMenu(false);
                     api<{ label: string; lat: number; lon: number }>(`/api/geo/place?q=${encodeURIComponent(hint)}`)
                       .then((row) => remember(row.label, [row.lat, row.lon]))
                       .catch(() => setPlace("Населённый пункт не найден"));
@@ -317,9 +335,8 @@ export function StorefrontsPage() {
               ))}
             </div>
           )}
-          <button type="button" className="place-map" onClick={() => setMapOpen(true)}>Выбрать на карте</button>
+          <button type="button" className="place-map" onClick={() => { setMenu(false); setMapOpen(true); }}>Выбрать на карте</button>
           <button type="submit" className="place-ok" aria-label="Это мой город">Ок</button>
-        </form>
           {signedIn ? (
             <button
               type="button"
@@ -333,6 +350,8 @@ export function StorefrontsPage() {
             </button>
           ) : (
             <Link className="leave" to="/login">Войти</Link>
+          )}
+        </form>
           )}
         </div>
         <img className="header-art" src="/potok-header.png?v=2" alt="Поток. Совместные закупки у фермеров" />

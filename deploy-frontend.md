@@ -40,7 +40,9 @@ npm install
 
 ## Каждый запуск
 
-Сначала должен работать API из `deploy.md` (`runserver` на порту 8000). Затем в отдельном окне Ubuntu:
+Оба процесса одной командой в Ubuntu: `bash ~/POTOK/scripts/dev.sh`. Она описана в `deploy.md`.
+
+Вручную: сначала API из `deploy.md` (`runserver` на порту 8000). Затем в отдельном окне Ubuntu:
 
 ```bash
 cd ~/POTOK/web

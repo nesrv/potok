@@ -62,7 +62,25 @@ sudo -u postgres psql -c "CREATE DATABASE potok OWNER potok;"
 
 ## API
 
-Каждый рабочий сеанс:
+Оба процесса сразу. Из PowerShell, не переустанавливая WSL:
+
+```powershell
+wsl -e bash -lc "cd ~/POTOK && bash scripts/dev.sh"
+```
+
+Из уже открытого Ubuntu то же самое: `cd ~/POTOK && bash scripts/dev.sh`.
+
+Миграции отдельно, из PowerShell:
+
+```powershell
+wsl -e bash -lc "cd ~/POTOK && bash scripts/migrate.sh"
+```
+
+Скрипт применяет их только к базе из `backend/.env`. Другие базы не меняет.
+
+Скрипт поднимает API и страницу. Занятый порт не освобождает: API уходит на 8001, страница на 5174. Ctrl+C останавливает только эти два процесса.
+
+Каждый рабочий сеанс вручную:
 
 ```bash
 cd ~/POTOK/backend
