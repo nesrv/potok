@@ -173,11 +173,11 @@ button.ghost, .button.ghost {
 }
 
 .home-menu {
+  display: none;
   position: absolute;
   top: calc(100% + 0.35rem);
   left: 0;
   right: 0;
-  display: grid;
   gap: 0.55rem;
   width: auto;
   margin: 0;
@@ -186,6 +186,8 @@ button.ghost, .button.ghost {
   border: 1px solid #e6e6e6;
   box-shadow: 0 16px 40px rgba(20, 30, 18, 0.08);
 }
+
+.home-bar.open .home-menu { display: grid; }
 
 .home-menu input,
 .home-menu .place-map,
@@ -227,7 +229,7 @@ button.ghost, .button.ghost {
   top: calc(100% + 0.35rem);
   left: 0;
   right: 0;
-  display: grid;
+  display: none;
   flex: none;
   width: auto;
   max-width: none;
@@ -1176,6 +1178,33 @@ input, textarea, select {
   .product { grid-template-columns: 1.35fr 0.8fr; }
   .product-photo img,
   .product-photo.ph { height: 320px; }
+}
+
+@media (min-width: 768px) {
+  .burger,
+  .home-city,
+  .burger-links { display: none; }
+
+  .home-bar .home-menu,
+  .home-bar.open .home-menu {
+    display: flex;
+    position: static;
+    flex: 1;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .home-menu input,
+  .home-menu .place-map,
+  .home-menu .place-ok,
+  .home-menu .leave { width: auto; }
 }
 
 @media (min-width: 768px) {

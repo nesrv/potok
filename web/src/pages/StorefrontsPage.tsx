@@ -278,7 +278,6 @@ export function StorefrontsPage() {
           </button>
           <span className="home-city">{draft || place}</span>
           {shop && <span className="who">{shop}</span>}
-          {menu && (
         <form
           className="place-line home-menu"
           onSubmit={(event) => {
@@ -358,7 +357,6 @@ export function StorefrontsPage() {
             <Link className="leave" to="/login">Войти</Link>
           )}
         </form>
-          )}
         </div>
         <img className="header-art" src="/potok-header.png?v=2" alt="Поток. Совместные закупки у фермеров" />
       </header>
