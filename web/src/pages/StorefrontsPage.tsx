@@ -153,6 +153,7 @@ export function StorefrontsPage() {
   const navigate = useNavigate();
   const signedIn = Boolean(getToken());
   const [shop, setShop] = useState("");
+  const [person, setPerson] = useState("");
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [farms, setFarms] = useState<Storefront[]>([]);
   const [error, setError] = useState("");
@@ -178,8 +179,20 @@ export function StorefrontsPage() {
   useEffect(() => {
     if (!signedIn) return;
     api<{ name: string; owner_id: number }[]>("/api/storefronts")
-      .then((rows) => setShop(rows.find((row) => row.owner_id === userId())?.name || ""))
-      .catch(() => setShop(""));
+      .then(async (rows) => {
+        const mine = rows.find((row) => row.owner_id === userId());
+        setShop(mine?.name || "");
+        if (mine) {
+          setPerson("");
+          return;
+        }
+        const profile = await api<{ name: string }>("/api/me");
+        setPerson(profile.name);
+      })
+      .catch(() => {
+        setShop("");
+        setPerson("");
+      });
   }, [signedIn]);
 
   useEffect(() => {
@@ -277,7 +290,7 @@ export function StorefrontsPage() {
             <span />
           </button>
           <span className="home-city">{draft || place}</span>
-          {shop && <span className="who">{shop}</span>}
+          {shop ? <span className="who">{shop}</span> : person ? <span className="who person">{person}</span> : null}
         <form
           className="place-line home-menu"
           onSubmit={(event) => {

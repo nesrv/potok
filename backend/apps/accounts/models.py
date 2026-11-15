@@ -21,6 +21,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     login = models.CharField(max_length=255, unique=True)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=32, blank=True)
+    name = models.CharField(max_length=120, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     delivery_address = models.CharField(max_length=500, blank=True)

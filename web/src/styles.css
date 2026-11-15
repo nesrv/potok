@@ -224,6 +224,8 @@ button.ghost, .button.ghost {
   white-space: nowrap;
 }
 
+.who.person { display: none; }
+
 .home-bar .home-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
@@ -1539,6 +1541,8 @@ input, textarea, select {
     border-radius: 999px;
     box-shadow: 0 8px 18px rgba(20, 50, 24, 0.12);
   }
+
+  .home-bar .who.person { display: block; }
 
   .home-bar .who {
     margin-left: auto;

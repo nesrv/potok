@@ -888,6 +888,16 @@ def my_delivery(request):
     return {"address": address, "lat": lat, "lon": lon}
 
 
+@router.get("/me", auth=auth)
+def me(request):
+    user = request.auth
+    name = (user.name or "").strip()
+    if not name:
+        raw = (user.email or user.phone or user.login or "").strip()
+        name = raw.split("@")[0] if "@" in raw else raw
+    return {"name": name}
+
+
 @router.get("/me/lines", auth=auth)
 def my_lines(request):
     lines = (

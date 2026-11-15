@@ -85,7 +85,7 @@ def vk_start() -> dict:
             "state": state,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
-            "scope": "email",
+            "scope": "vkid.personal_info email",
         }
     )
     return {
@@ -117,19 +117,26 @@ def vk_finish(code: str, device_id: str, verifier: str, state: str) -> User:
     user_id = payload.get("user_id")
     if not token or not user_id:
         raise OrderError(400, "VK не подтвердил вход")
-    email = (payload.get("email") or "").strip().lower()
-    if not email:
-        info = _post_form(
-            "https://id.vk.ru/oauth2/user_info",
-            {"access_token": token, "client_id": settings.VK_CLIENT_ID},
-        )
-        email = ((info.get("user") or {}).get("email") or "").strip().lower()
+    info = _post_form(
+        "https://id.vk.ru/oauth2/user_info",
+        {"access_token": token, "client_id": settings.VK_CLIENT_ID},
+    )
+    profile = info.get("user") or {}
+    email = (payload.get("email") or profile.get("email") or "").strip().lower()
+    first = (profile.get("first_name") or "").strip()
+    last = (profile.get("last_name") or "").strip()
+    full_name = " ".join(part for part in (first, last) if part)
     login = email or f"vk{user_id}"
     user = User.objects.filter(login=login).first()
     if user is None:
-        user = User(login=login, email=email)
+        user = User(login=login, email=email, name=full_name)
         user.set_unusable_password()
         user.save()
+    elif full_name and user.name != full_name:
+        user.name = full_name
+        if email and not user.email:
+            user.email = email
+        user.save(update_fields=["name", "email"])
     return user
 
 
