@@ -198,6 +198,22 @@ button.ghost, .button.ghost {
 
 .home-menu .place-hints { right: 0; left: 0; }
 
+.burger-links {
+  display: grid;
+  margin-top: 0.15rem;
+  border-top: 1px solid #ececec;
+  padding-top: 0.25rem;
+}
+
+.burger-links a {
+  padding: 0.72rem 0.1rem;
+  color: #143d22;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
 .home-bar .who {
   flex: none;
   max-width: 7.5rem;

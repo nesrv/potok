@@ -337,6 +337,12 @@ export function StorefrontsPage() {
           )}
           <button type="button" className="place-map" onClick={() => { setMenu(false); setMapOpen(true); }}>Выбрать на карте</button>
           <button type="submit" className="place-ok" aria-label="Это мой город">Ок</button>
+          <nav className="burger-links">
+            <Link to={signedIn ? "/my-orders" : "/login"} onClick={() => setMenu(false)}>Мои заказы</Link>
+            <Link to="/shops" onClick={() => setMenu(false)}>Фермеры рядом</Link>
+            <Link to={signedIn ? "/cabinet" : "/login"} onClick={() => setMenu(false)}>Моя лавка</Link>
+            <Link to={signedIn ? "/cabinet" : "/login"} onClick={() => setMenu(false)}>Профиль</Link>
+          </nav>
           {signedIn ? (
             <button
               type="button"
